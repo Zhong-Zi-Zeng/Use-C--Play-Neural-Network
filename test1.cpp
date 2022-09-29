@@ -30,7 +30,7 @@ void show(Parent &cls){
 }
 
 int main(){
-    MSE loss;
+    MSE* loss = new MSE;
 
     show(loss);
     return 0;

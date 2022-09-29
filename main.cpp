@@ -3,9 +3,8 @@
 #include <math.h>
 #include <time.h>
 #include <fstream>
-
-
 using namespace std;
+
 
 
 // ==============工具==============
@@ -43,7 +42,7 @@ vector<vector<double>> dot(vector<vector<double>> a, vector<vector<double>> b) {
     return result;
 }
 
-// 矩陣相乘
+// 矩陣乘法
 vector<vector<double>> multiply(vector<vector<double>> a, vector<vector<double>> b) {
     int row = a.size();
     int col = a[0].size();
@@ -184,18 +183,6 @@ double total_sum(vector<vector<double>> m) {
     return total;
 }
 
-// linspace
-vector<double> linspace(double start, double end, int num){
-    double interval = (end - start) / (num - 1);
-    vector<double> result(num, 0);
-
-    for (int i=0; i < num; i++){
-        result[i] = start + i * interval;
-    };
-
-    return result;
-}
-
 // 顯示矩陣內容
 void show_mat(vector<vector<double>> m) {
     int row = m.size();
@@ -275,8 +262,6 @@ public:
     }
 };
 
-
-
 // ==============損失函式抽象類==============
 class LossFunc {
 public:
@@ -302,7 +287,6 @@ public:
     }
 };
 
-
 // ==============抽象層==============
 class Layer {
 public:
@@ -324,16 +308,28 @@ public:
     virtual vector<vector<double>> BP(vector<vector<double>>) = 0; // 反向傳播
 };
 
-
 // ==============隱藏層==============
 class BaseLayer : public Layer {
 public:
     BaseLayer(int input_shape, int output_shape, ActivationFunc *activation, bool use_bias = true) {
+        init(input_shape, output_shape, activation, use_bias);
+    }
+
+    BaseLayer(int output_shape, ActivationFunc *activation, bool use_bias = true) {
+        init(output_shape, activation, use_bias);
+    }
+
+    void init(int input_shape, int output_shape, ActivationFunc *activation=new sigmoid, bool use_bias = true){
         this->input_shape = input_shape;
         this->output_shape = output_shape;
         this->use_bias = use_bias;
         this->activation = activation;
     }
+
+    void init(int output_shape, ActivationFunc *activation, bool use_bias = true){
+        init(input_shape, output_shape, activation, use_bias);
+    }
+
 
     void set_weight_bias() {
         w = generate_mat(input_shape, output_shape);
@@ -358,17 +354,15 @@ public:
         d_w = dot(transpose(x), delta);
         d_b = sum(delta, 0);
         vector<vector<double>> d_x = dot(delta, transpose(w));
- c
+
         return d_x;
     }
 };
 
-
 // ==============輸出層==============
 class OutputLayer : public Layer {
 public:
-    OutputLayer(int input_shape, int output_shape, ActivationFunc *activation, LossFunc *loss, bool use_bias = true) {
-        this->input_shape = input_shape;
+    OutputLayer(int output_shape, ActivationFunc *activation, LossFunc *loss, bool use_bias = true) {
         this->output_shape = output_shape;
         this->use_bias = use_bias;
         this->activation = activation;
@@ -411,35 +405,48 @@ public:
 
 };
 
+// ==============序列模型==============
+class Sequential{
+public:
+    int epoch;
+    int batch_size;
+    double learning_rate;
+    vector<Layer*> layer_list;
 
-// ==============生成訓練數據==============
-vector<vector<double>> generate_train_x(){
-    vector<vector<double>> x(100, vector<double>(1, 0));
-    int row = x.size();
-    int col = x[0].size();
-    double num = 0;
+    Sequential(int epoch, int batch_size, double learning_rate){
+        this->epoch = epoch;
+        this->batch_size = batch_size;
+        this->learning_rate = learning_rate;
+    };
 
-    for (int i = 0; i < row; i++) {
-        for (int j = 0; j < col; j++)
-            x[i][j] = num;
-            num += 1;
+    // 增加層數
+    void add(Layer *layer){
+        layer_list.push_back(layer);
     }
 
-    return x;
-}
+    // 設置所有層數的權重
+    void compile(){
+        int layer_length = layer_list.size();
 
-//vector<vector<double>> generate_train_y(vector<double> x){
-//    vector<vector<double>> y(100, vector<double>(1, 0));
-//    int row = y.size();
-//
-//    for (int i = 0; i < row; i++) {
-//        for (int j = 0; j < col; j++)
-//            y[i][j] = sin(x[i][j]);
-//    }
-//
-//    return y;
-//
-//}
+        for (int i=0; i < layer_length; i++){
+            layer_list[i]->set_weight_bias();
+
+            if (i + 1 < layer_length){
+                layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
+            }
+        }
+    };
+
+    // 訓練
+    void fit(vector<vector<double>> train_x, vector<vector<double>> train_y){
+
+
+
+
+    }
+
+
+};
 
 // ==============Batch==============
 //vector<vector<double>> get_batch
@@ -447,11 +454,13 @@ vector<vector<double>> generate_train_x(){
 int main() {
     srand(time(NULL));
 
-    vector<double> r = linspace(0, 1, 100);
+    Sequential module(10, 20, 0.1);
+    module.add(new BaseLayer(2, 5, new sigmoid));
+    module.add(new BaseLayer(10, new sigmoid));
+    module.add(new BaseLayer(8, new sigmoid));
+    module.add(new OutputLayer(2, new sigmoid, new MSE));
 
-    for (int i=0; i < 100; i ++){
-        cout << r[i] << endl;
-    }
+    module.compile();
 
 //    ofstream myFile;
 //    myFile.open("test.txt");
