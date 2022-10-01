@@ -1,10 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
-#include <time.h>
 #include <fstream>
-using namespace std;
 
+using namespace std;
 
 
 // ==============工具==============
@@ -56,7 +55,8 @@ vector<vector<double>> multiply(vector<vector<double>> a, vector<vector<double>>
 
     return result;
 }
-vector<vector<double>> multiply(vector<vector<double>> a, double b){
+
+vector<vector<double>> multiply(vector<vector<double>> a, double b) {
     int row = a.size();
     int col = a[0].size();
 
@@ -86,17 +86,28 @@ vector<vector<double>> transpose(vector<vector<double>> m) {
 
 // 矩陣相加
 vector<vector<double>> add(vector<vector<double>> a, vector<vector<double>> b) {
-    int row = a.size();
-    int col = a[0].size();
+    int a_row = a.size();
+    int a_col = a[0].size();
 
-    vector<vector<double>> result = generate_mat(row, col, 0, false);
+    int b_row = b.size();
+    int b_col = b[0].size();
 
-    for (int i = 0; i < row; i++) {
-        for (int j = 0; j < col; j++)
-            result[i][j] = a[i][j] + b[i][j];
+    vector<vector<double>> result = generate_mat(a_row, a_col, 0, false);
+
+    if (a_row == b_row && a_col == b_col) {
+        for (int i = 0; i < a_row; i++) {
+            for (int j = 0; j < a_col; j++)
+                result[i][j] = a[i][j] + b[i][j];
+        }
+        return result;
+    } else if (a_col == b_col) {
+        for (int i = 0; i < a_row; i++) {
+            for (int j = 0; j < a_col; j++) {
+                result[i][j] = a[i][j] + b[0][j];
+            }
+        }
+        return result;
     }
-
-    return result;
 }
 
 // 矩陣相減
@@ -170,6 +181,7 @@ vector<vector<double>> sum(vector<vector<double>> a, int axis = 0) {
         return result;
     }
 }
+
 double total_sum(vector<vector<double>> m) {
     int row = m.size();
     int col = m[0].size();
@@ -203,10 +215,11 @@ void shape(vector<vector<double>> m) {
 }
 
 // ==============激活函式抽象類==============
-class ActivationFunc{
+class ActivationFunc {
 public:
-    virtual double undiff (double pre) = 0;
-    virtual double diff (double pre) = 0;
+    virtual double undiff(double pre) = 0;
+
+    virtual double diff(double pre) = 0;
 
     // 計算激活函式輸出值
     vector<vector<double>> cal_activation(vector<vector<double>> m, bool diff = false) {
@@ -217,7 +230,7 @@ public:
 
         for (int r = 0; r < row; r++) {
             for (int c = 0; c < col; c++) {
-                result[r][c] =  diff ? this->diff(m[r][c]) : this->undiff(m[r][c]);
+                result[r][c] = diff ? this->diff(m[r][c]) : this->undiff(m[r][c]);
             }
         }
         return result;
@@ -226,7 +239,7 @@ public:
 };
 
 // ==============sigmoid==============
-class sigmoid : public ActivationFunc{
+class sigmoid : public ActivationFunc {
 public:
     double undiff(double x) {
         return 1 / (1 + exp(-x));
@@ -239,19 +252,19 @@ public:
 };
 
 // ==============relu==============
-class relu : public ActivationFunc{
+class relu : public ActivationFunc {
 public:
     double undiff(double x) {
-        return (x > 0)? x : 0;
+        return (x > 0) ? x : 0;
     }
 
     double diff(double x) {
-        return (x > 0)? 1 : 0;
+        return (x > 0) ? 1 : 0;
     }
 };
 
 // ==============linear==============
-class linear : public ActivationFunc{
+class linear : public ActivationFunc {
 public:
     double undiff(double x) {
         return x;
@@ -265,13 +278,14 @@ public:
 // ==============損失函式抽象類==============
 class LossFunc {
 public:
-    virtual double undiff (vector<vector<double>> pre, vector<vector<double>> label) = 0;
-    virtual vector<vector<double>> diff (vector<vector<double>> pre, vector<vector<double>> label) = 0;
+    virtual double undiff(vector<vector<double>> pre, vector<vector<double>> label) = 0;
+
+    virtual vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) = 0;
 
 };
 
 // ==============均方誤差損失函式==============
-class MSE :public LossFunc{
+class MSE : public LossFunc {
 public:
     double undiff(vector<vector<double>> pre, vector<vector<double>> label) {
         vector<vector<double>> o1 = sub(pre, label);
@@ -304,6 +318,8 @@ public:
     vector<vector<double>> d_b; // Bias的梯度
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
+    double get_loss(vector<vector<double>> ){};
+
     virtual vector<vector<double>> FP(vector<vector<double>>) = 0; // 前向傳播
     virtual vector<vector<double>> BP(vector<vector<double>>) = 0; // 反向傳播
 };
@@ -319,14 +335,14 @@ public:
         init(output_shape, activation, use_bias);
     }
 
-    void init(int input_shape, int output_shape, ActivationFunc *activation=new sigmoid, bool use_bias = true){
+    void init(int input_shape, int output_shape, ActivationFunc *activation = new sigmoid, bool use_bias = true) {
         this->input_shape = input_shape;
         this->output_shape = output_shape;
         this->use_bias = use_bias;
         this->activation = activation;
     }
 
-    void init(int output_shape, ActivationFunc *activation, bool use_bias = true){
+    void init(int output_shape, ActivationFunc *activation, bool use_bias = true) {
         init(input_shape, output_shape, activation, use_bias);
     }
 
@@ -374,7 +390,7 @@ public:
         b = generate_mat(1, output_shape);
     }
 
-    double get_loss(vector<vector<double>> lable){
+    double get_loss(vector<vector<double>> lable) {
         return (*loss).undiff(y, lable);
     }
 
@@ -406,45 +422,95 @@ public:
 };
 
 // ==============序列模型==============
-class Sequential{
+class Sequential {
 public:
     int epoch;
     int batch_size;
     double learning_rate;
-    vector<Layer*> layer_list;
+    vector<Layer *> layer_list;
 
-    Sequential(int epoch, int batch_size, double learning_rate){
+    Sequential(int epoch, int batch_size, double learning_rate) {
         this->epoch = epoch;
         this->batch_size = batch_size;
         this->learning_rate = learning_rate;
     };
 
     // 增加層數
-    void add(Layer *layer){
+    void add(Layer *layer) {
         layer_list.push_back(layer);
     }
 
     // 設置所有層數的權重
-    void compile(){
+    void compile() {
         int layer_length = layer_list.size();
 
-        for (int i=0; i < layer_length; i++){
+        for (int i = 0; i < layer_length; i++) {
             layer_list[i]->set_weight_bias();
 
-            if (i + 1 < layer_length){
+            if (i + 1 < layer_length) {
                 layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
             }
         }
     };
 
     // 訓練
-    void fit(vector<vector<double>> train_x, vector<vector<double>> train_y){
+    void fit(vector<vector<double>> train_x, vector<vector<double>> train_y) {
+        for (int e = 0; e < epoch; e++) {
 
+            for (int b = 0; b < train_x.size(); b += batch_size) {
+                vector<vector<double>> batch_x = get_batch_data(train_x, b,
+                                                                min((int) b + batch_size, (int) train_x.size()));
+                vector<vector<double>> batch_y = get_batch_data(train_y, b,
+                                                                min((int) b + batch_size, (int) train_x.size()));
 
+                vector<vector<double>> output = FP(batch_x);
+                BP(batch_y);
+                update_weight();
+                double loss = layer_list[layer_list.size() - 1]->get_loss(batch_y);
+                cout << loss << endl;
 
+            }
+
+        }
+    }
+
+    // 將資料分成 Batchsize
+    inline vector<vector<double>> get_batch_data(vector<vector<double>> train_x, int start, int end) {
+        vector<vector<double>> result = generate_mat(end - start, train_x[0].size());
+
+        for (int i = 0; i < (end - start); i++) {
+            result[i] = train_x[start + i];
+        }
+        return result;
+    }
+
+    // 前向傳播
+    vector<vector<double>> FP(vector<vector<double>> batch_x) {
+        vector<vector<double>> output = batch_x;
+
+        for (int i = 0; i < layer_list.size(); i++) {
+            output = layer_list[i]->FP(output);
+        }
+        return output;
+    }
+
+    // 反向傳播
+    void BP(vector<vector<double>> batch_y) {
+        vector<vector<double>> delta = layer_list[layer_list.size() - 1]->BP(batch_y);
+
+        for (int i = layer_list.size() - 2; i > -1; i--) {
+            delta = layer_list[i]->BP(delta);
+        }
 
     }
 
+    // 更新梯度
+    void update_weight(){
+        for (int i = 0; i < layer_list.size(); i++){
+            layer_list[i]->w = multiply(multiply((vector<vector<double>>) layer_list[i]->w,(int) learning_rate), 1. / batch_size);
+            layer_list[i]->b = multiply(multiply((vector<vector<double>>) layer_list[i]->b,(int) learning_rate), 1. / batch_size);
+        }
+    }
 
 };
 
@@ -454,69 +520,18 @@ public:
 int main() {
     srand(time(NULL));
 
-    Sequential module(10, 20, 0.1);
-    module.add(new BaseLayer(2, 5, new sigmoid));
+    vector<vector<double>> x = generate_mat(25, 5);
+    vector<vector<double>> y = generate_mat(25, 1);
+
+    Sequential module(2, 10, 0.1);
+    module.add(new BaseLayer(5, 10, new sigmoid));
     module.add(new BaseLayer(10, new sigmoid));
     module.add(new BaseLayer(8, new sigmoid));
     module.add(new OutputLayer(2, new sigmoid, new MSE));
 
     module.compile();
+    module.fit(x, y);
 
-//    ofstream myFile;
-//    myFile.open("test.txt");
-//
-////  實例化激活函式
-//    sigmoid sigmoid;
-//    linear linear;
-//
-////  實例化損失函式
-//    MSE mse;
-//
-////  產生訓練數據
-//    vector<vector<double>> train_x = generate_train_x(); // (100, 1)
-//    vector<vector<double>> train_y = generate_train_y(train_x);// (100, 1)
-//
-////  建立層
-//    BaseLayer D1(1, 128, &sigmoid, true);
-//    OutputLayer D2(128, 1, &linear, &mse, true);
-//
-////  設置weight
-//    D1.set_weight_bias();
-//    D2.set_weight_bias();
-//
-//    for (int e=0; e < 100; e++){
-//        for (int i=0; i < 100; i++){
-//            vector<vector<double>> x(1, vector<double>(1, train_x[i][0]));
-//            vector<vector<double>> y(1, vector<double>(1, train_y[i][0]));
-//
-//            //  FP
-//            vector<vector<double>> o1 = D1.FP(x);
-//            vector<vector<double>> o2 = D2.FP(o1);
-//
-//            cout << "loss:" << D2.get_loss(y) << endl;
-////            cout << "label:" << y[0][0] << "  ";
-//
-//            if (e == 99){
-//                myFile << o2[0][0] << "\n";
-//            }
-//
-////            show_mat(o2);
-//
-//            // BP
-//            vector<vector<double>> d_x1 = D2.BP(y);
-//            vector<vector<double>> d_x2 = D1.BP(d_x1);
-//
-//            // gradient descent
-//            D1.w = sub(D1.w, multiply(D1.d_w, (double) 0.01));
-//            D1.b = sub(D1.b, multiply(D1.d_b, (double) 0.01));
-//            D2.w = sub(D2.w, multiply(D2.d_w, (double) 0.01));
-//            D2.b = sub(D2.b, multiply(D2.d_b, (double) 0.01));
-//        }
-//
-//
-//    }
-//
-//    myFile.close();
 
     return 0;
 }

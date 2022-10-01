@@ -1,4 +1,3 @@
-
 #include <iostream>
 using namespace std;
 
@@ -14,6 +13,8 @@ class Parent{
 };
 
 class MSE: public Parent{
+    protected: int passward = 1231234;
+
     public:
         void FP(){
             cout << "fp" << endl;
@@ -30,8 +31,9 @@ void show(Parent &cls){
 }
 
 int main(){
-    MSE* loss = new MSE;
+    int a[] = {1 , 2 ,3};
 
-    show(loss);
+    cout << a[-1] << endl;
+
     return 0;
 }
