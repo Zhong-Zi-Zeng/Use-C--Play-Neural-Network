@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
-#include <fstream>
+
 
 using namespace std;
 
@@ -214,6 +214,31 @@ void shape(vector<vector<double>> m) {
     cout << "(" << m.size() << "," << m[0].size() << ")" << endl;
 }
 
+// linspace
+vector<vector<double>> linspace(double start, double end, int num){
+    double interval = (end - start) / (num - 1);
+    vector<vector<double>> result = generate_mat(num, 1);
+
+    for (int i=0; i < num; i++){
+        result[i][0] = start + i * interval;
+    };
+
+    return result;
+}
+
+vector<vector<double>> generate_y(vector<vector<double>> x){
+    int row = x.size();
+
+    vector<vector<double>> result = generate_mat(row, 1);
+
+    for (int i=0; i < row; i++){
+        result[i][0] = sin(x[i][0]);
+    }
+
+    return result;
+}
+
+
 // ==============激活函式抽象類==============
 class ActivationFunc {
 public:
@@ -318,8 +343,9 @@ public:
     vector<vector<double>> d_b; // Bias的梯度
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
-    double get_loss(vector<vector<double>> ){};
-
+    double get_loss(vector<vector<double>> lable) {
+        return (*loss).undiff(y, lable);
+    }
     virtual vector<vector<double>> FP(vector<vector<double>>) = 0; // 前向傳播
     virtual vector<vector<double>> BP(vector<vector<double>>) = 0; // 反向傳播
 };
@@ -466,11 +492,11 @@ public:
                 vector<vector<double>> output = FP(batch_x);
                 BP(batch_y);
                 update_weight();
-                double loss = layer_list[layer_list.size() - 1]->get_loss(batch_y);
-                cout << loss << endl;
 
+                Layer *output_layer = layer_list[layer_list.size() - 1];
+                double loss = output_layer->get_loss(batch_y);
+                cout << loss/batch_size << endl;
             }
-
         }
     }
 
@@ -507,8 +533,8 @@ public:
     // 更新梯度
     void update_weight(){
         for (int i = 0; i < layer_list.size(); i++){
-            layer_list[i]->w = multiply(multiply((vector<vector<double>>) layer_list[i]->w,(int) learning_rate), 1. / batch_size);
-            layer_list[i]->b = multiply(multiply((vector<vector<double>>) layer_list[i]->b,(int) learning_rate), 1. / batch_size);
+            layer_list[i]->w = sub(layer_list[i]->w, multiply(multiply((vector<vector<double>>) layer_list[i]->d_w,(double) learning_rate), 1. / batch_size));
+            layer_list[i]->b = sub(layer_list[i]->b, multiply(multiply((vector<vector<double>>) layer_list[i]->d_b,(double) learning_rate), 1. / batch_size));
         }
     }
 
@@ -520,14 +546,12 @@ public:
 int main() {
     srand(time(NULL));
 
-    vector<vector<double>> x = generate_mat(25, 5);
-    vector<vector<double>> y = generate_mat(25, 1);
+    vector<vector<double>> x = linspace(0, 6.28, 100);
+    vector<vector<double>> y = generate_y(x);
 
-    Sequential module(2, 10, 0.1);
-    module.add(new BaseLayer(5, 10, new sigmoid));
-    module.add(new BaseLayer(10, new sigmoid));
-    module.add(new BaseLayer(8, new sigmoid));
-    module.add(new OutputLayer(2, new sigmoid, new MSE));
+    Sequential module(100, 16, 0.2);
+    module.add(new BaseLayer(1, 64, new sigmoid));
+    module.add(new OutputLayer(1, new linear, new MSE));
 
     module.compile();
     module.fit(x, y);

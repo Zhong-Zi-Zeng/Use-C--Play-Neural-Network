@@ -1,39 +1,23 @@
 #include <iostream>
+#include "pbPlots.hpp"
+#include "supportLib.hpp"
+
 using namespace std;
 
-class Parent{
-    public:
-        virtual void FP() = 0;
-        virtual void BP() = 0;
-
-        void hi(){
-            cout << "Hi" << endl;
-        }
-
-};
-
-class MSE: public Parent{
-    protected: int passward = 1231234;
-
-    public:
-        void FP(){
-            cout << "fp" << endl;
-        }
-
-        void BP(){
-            cout << "bp" << endl;
-        }
-};
-
-void show(Parent &cls){
-    cls.FP();
-    cls.hi();
-}
-
 int main(){
-    int a[] = {1 , 2 ,3};
+    RGBABitmapImageReference *imageRef = CreateRGBABitmapImageReference();
+    char error[10] = "error!";
 
-    cout << a[-1] << endl;
+    vector<double> x{-2, 1, 2, 3, 4, 5};
+    vector<double> y{-2, 1, 2, 3, 4, 5};
+    vector<double> x2{-1, -1, 4, 3, 4, 5};
+    vector<double> y2{-2, 1, 5, 3, 4, 7};
+
+    DrawScatterPlot(imageRef, 600., 400., &x, &y);
+    DrawScatterPlot(imageRef, 600., 400., &x2, &y2);
+    vector<double> *pngData = ConvertToPNG(imageRef->image);
+    WriteToFile(pngData, "plot.png");
+    DeleteImage(imageRef->image);
 
     return 0;
 }
