@@ -14,7 +14,7 @@ vector<vector<double>> generate_mat(int r, int c, int initial_value = 0, bool us
     if (use_random) {
         for (int i = 0; i < r; i++) {
             for (int j = 0; j < c; j++) {
-                matrix[i][j] = (double) rand() / (RAND_MAX + 1.0);
+                matrix[i][j] = 2 * rand() / (RAND_MAX + 1.0) - 1;
             }
         }
     }
@@ -100,7 +100,7 @@ vector<vector<double>> add(vector<vector<double>> a, vector<vector<double>> b) {
                 result[i][j] = a[i][j] + b[i][j];
         }
         return result;
-    } else if (a_col == b_col) {
+    } else{
         for (int i = 0; i < a_row; i++) {
             for (int j = 0; j < a_col; j++) {
                 result[i][j] = a[i][j] + b[0][j];
@@ -215,23 +215,23 @@ void shape(vector<vector<double>> m) {
 }
 
 // linspace
-vector<vector<double>> linspace(double start, double end, int num){
+vector<vector<double>> linspace(double start, double end, int num) {
     double interval = (end - start) / (num - 1);
     vector<vector<double>> result = generate_mat(num, 1);
 
-    for (int i=0; i < num; i++){
+    for (int i = 0; i < num; i++) {
         result[i][0] = start + i * interval;
     };
 
     return result;
 }
 
-vector<vector<double>> generate_y(vector<vector<double>> x){
+vector<vector<double>> generate_y(vector<vector<double>> x) {
     int row = x.size();
 
     vector<vector<double>> result = generate_mat(row, 1);
 
-    for (int i=0; i < row; i++){
+    for (int i = 0; i < row; i++) {
         result[i][0] = sin(x[i][0]);
     }
 
@@ -267,12 +267,12 @@ public:
 class sigmoid : public ActivationFunc {
 public:
     double undiff(double x) {
-        return 1 / (1 + exp(-x));
+        return 1. / (1. + exp(-x));
     }
 
     double diff(double x) {
         double output = undiff(x);
-        return output * (1 - output);
+        return output * (1. - output);
     }
 };
 
@@ -403,12 +403,12 @@ public:
 class Sequential {
 public:
     int epoch;  // 訓練次數
-    double batch_size;  // 批量大小
+    int batch_size;  // 批量大小
     double learning_rate; // 學習率
     LossFunc *loss; // 損失函式
     vector<Layer *> layer_list;  // 存放網路層
 
-    Sequential(int epoch, double batch_size, double learning_rate, LossFunc *loss) {
+    Sequential(int epoch, int batch_size, double learning_rate, LossFunc *loss) {
         this->epoch = epoch;
         this->batch_size = batch_size;
         this->learning_rate = learning_rate;
@@ -437,19 +437,20 @@ public:
     void fit(vector<vector<double>> train_x, vector<vector<double>> train_y) {
         for (int e = 0; e < epoch; e++) {
             for (int b = 0; b < train_x.size(); b += batch_size) {
+
                 vector<vector<double>> batch_x = get_batch_data(train_x, b,
-                                                                min(b + batch_size, (double) train_x.size()));
+                                                                min((int) b + batch_size, (int) train_x.size()));
                 vector<vector<double>> batch_y = get_batch_data(train_y, b,
-                                                                min(b + batch_size, (double) train_x.size()));
+                                                                min((int) b + batch_size, (int) train_x.size()));
                 vector<vector<double>> output = FP(batch_x);
                 BP(output, batch_y);
                 update_weight();
 
-//                double loss_value = loss->undiff(output, batch_y);
-//                cout << loss_value/batch_size << endl;
-
                 cout << "Epoch:" << e << endl;
-//                show_mat(output);
+//                cout << "batch_x:" << endl;
+//                show_mat(batch_x);
+//                cout << "batch_y:" << endl;
+//                show_mat(batch_y);
                 cout << "Pre:" << endl;
                 show_mat(output);
                 cout << "Label:" << endl;
@@ -457,13 +458,11 @@ public:
 
 
             }
-
-
         }
     }
 
     // 將資料分成 Batchsize
-    inline vector<vector<double>> get_batch_data(vector<vector<double>> train_x, double start, double end) {
+    inline vector<vector<double>> get_batch_data(vector<vector<double>> train_x, int start, int end) {
         vector<vector<double>> result = generate_mat(end - start, train_x[0].size());
 
         for (int i = 0; i < (end - start); i++) {
@@ -486,20 +485,21 @@ public:
     inline void BP(vector<vector<double>> output, vector<vector<double>> batch_y) {
         vector<vector<double>> delta = loss->diff(output, batch_y);
 
+
         for (int i = layer_list.size() - 1; i > -1; i--) {
             delta = layer_list[i]->BP(delta);
         }
-
     }
 
     // 更新梯度
-    inline void update_weight(){
-        for (int i = 0; i < layer_list.size(); i++){
-            layer_list[i]->w = sub(layer_list[i]->w, multiply(multiply((vector<vector<double>>) layer_list[i]->d_w,(double) learning_rate), 1. / batch_size));
-            layer_list[i]->b = sub(layer_list[i]->b, multiply(multiply((vector<vector<double>>) layer_list[i]->d_b,(double) learning_rate), 1. / batch_size));
+    inline void update_weight() {
+        for (int i = 0; i < layer_list.size(); i++) {
+            layer_list[i]->w = sub(layer_list[i]->w, multiply(
+                    multiply((vector<vector<double>>) layer_list[i]->d_w, (double) learning_rate), (double ) 1. / batch_size));
+            layer_list[i]->b = sub(layer_list[i]->b, multiply(
+                    multiply((vector<vector<double>>) layer_list[i]->d_b, (double) learning_rate), (double ) 1. / batch_size));
         }
     }
-
 };
 
 int main() {
@@ -514,8 +514,12 @@ int main() {
                                 {1},
                                 {1}};
 
-    Sequential module(200, 4, 0.2, new MSE);
-    module.add(new BaseLayer(3, 1, new sigmoid));
+
+    Sequential module(1000, 2, 0.2, new MSE);
+
+    module.add(new BaseLayer(3, 16, new sigmoid));
+    module.add(new BaseLayer(32, new sigmoid));
+    module.add(new BaseLayer(64, new sigmoid));
     module.add(new BaseLayer(1, new sigmoid));
 
     module.compile();
