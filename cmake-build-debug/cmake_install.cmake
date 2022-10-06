@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/User/Desktop/Use-C--Play-Neural-Network
+# Install script for directory: C:/Users/ximen/Desktop/c++_Neural_Network
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "C:/Users/User/Desktop/Use-C--Play-Neural-Network/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "C:/Users/ximen/Desktop/c++_Neural_Network/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

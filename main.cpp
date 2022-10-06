@@ -214,30 +214,6 @@ void shape(vector<vector<double>> m) {
     cout << "(" << m.size() << "," << m[0].size() << ")" << endl;
 }
 
-// linspace
-vector<vector<double>> linspace(double start, double end, int num) {
-    double interval = (end - start) / (num - 1);
-    vector<vector<double>> result = generate_mat(num, 1);
-
-    for (int i = 0; i < num; i++) {
-        result[i][0] = start + i * interval;
-    };
-
-    return result;
-}
-
-vector<vector<double>> generate_y(vector<vector<double>> x) {
-    int row = x.size();
-
-    vector<vector<double>> result = generate_mat(row, 1);
-
-    for (int i = 0; i < row; i++) {
-        result[i][0] = sin(x[i][0]);
-    }
-
-    return result;
-}
-
 
 // ==============激活函式抽象類==============
 class ActivationFunc {
@@ -399,20 +375,50 @@ public:
 };
 
 
+// ==============優化器抽象類==============
+class Optimizer{
+public:
+    double learning_rate;
+    int batch_size;
+
+    virtual void gradient_decent(vector<Layer *> layer_list, int batch_size) = 0;
+};
+
+
+// ==============SGD==============
+class SGD: public Optimizer{
+public:
+    SGD(double learning_rate){
+        this->learning_rate = learning_rate;
+    }
+
+    void gradient_decent(vector<Layer *> layer_list, int batch_size){
+        int layer_length = layer_list.size();
+
+        for (int i = 0; i < layer_length; i++) {
+            layer_list[i]->w = sub(layer_list[i]->w, multiply(
+                    multiply((vector<vector<double>>) layer_list[i]->d_w, (double) learning_rate), (double ) 1. / batch_size));
+            layer_list[i]->b = sub(layer_list[i]->b, multiply(
+                    multiply((vector<vector<double>>) layer_list[i]->d_b, (double) learning_rate), (double ) 1. / batch_size));
+        }
+    }
+};
+
+
 // ==============序列模型==============
 class Sequential {
 public:
     int epoch;  // 訓練次數
     int batch_size;  // 批量大小
-    double learning_rate; // 學習率
     LossFunc *loss; // 損失函式
+    Optimizer *opt;  // 優化器
     vector<Layer *> layer_list;  // 存放網路層
 
-    Sequential(int epoch, int batch_size, double learning_rate, LossFunc *loss) {
+    Sequential(int epoch, int batch_size, LossFunc *loss, Optimizer *opt) {
         this->epoch = epoch;
         this->batch_size = batch_size;
-        this->learning_rate = learning_rate;
         this->loss = loss;
+        this->opt = opt;
     };
 
     // 增加層數
@@ -491,14 +497,9 @@ public:
         }
     }
 
-    // 更新梯度
+    // 更新權重
     inline void update_weight() {
-        for (int i = 0; i < layer_list.size(); i++) {
-            layer_list[i]->w = sub(layer_list[i]->w, multiply(
-                    multiply((vector<vector<double>>) layer_list[i]->d_w, (double) learning_rate), (double ) 1. / batch_size));
-            layer_list[i]->b = sub(layer_list[i]->b, multiply(
-                    multiply((vector<vector<double>>) layer_list[i]->d_b, (double) learning_rate), (double ) 1. / batch_size));
-        }
+        opt->gradient_decent(layer_list, batch_size);
     }
 };
 
@@ -514,8 +515,7 @@ int main() {
                                 {1},
                                 {1}};
 
-
-    Sequential module(1000, 2, 0.2, new MSE);
+    Sequential module(40000, 2, new MSE, new SGD(0.2));
 
     module.add(new BaseLayer(3, 16, new sigmoid));
     module.add(new BaseLayer(32, new sigmoid));
