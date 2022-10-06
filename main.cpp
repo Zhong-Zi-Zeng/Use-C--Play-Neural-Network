@@ -1,10 +1,10 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
-
+#include <algorithm>
+#include <time.h>
 
 using namespace std;
-
 
 // ==============工具==============
 // 生成權重
@@ -343,9 +343,6 @@ public:
     vector<vector<double>> d_b; // Bias的梯度
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
-    double get_loss(vector<vector<double>> lable) {
-        return (*loss).undiff(y, lable);
-    }
     virtual vector<vector<double>> FP(vector<vector<double>>) = 0; // 前向傳播
     virtual vector<vector<double>> BP(vector<vector<double>>) = 0; // 反向傳播
 };
@@ -401,63 +398,21 @@ public:
     }
 };
 
-// ==============輸出層==============
-class OutputLayer : public Layer {
-public:
-    OutputLayer(int output_shape, ActivationFunc *activation, LossFunc *loss, bool use_bias = true) {
-        this->output_shape = output_shape;
-        this->use_bias = use_bias;
-        this->activation = activation;
-        this->loss = loss;
-    }
-
-    void set_weight_bias() {
-        w = generate_mat(input_shape, output_shape);
-        b = generate_mat(1, output_shape);
-    }
-
-    double get_loss(vector<vector<double>> lable) {
-        return (*loss).undiff(y, lable);
-    }
-
-    vector<vector<double>> FP(vector<vector<double>> x) {
-        this->x = x;
-
-        u = dot(x, w);
-
-        if (use_bias) {
-            u = add(u, b);
-        }
-        y = (*activation).cal_activation(u, false);
-
-        return y;
-    }
-
-    vector<vector<double>> BP(vector<vector<double>> lable) {
-        vector<vector<double>> delta = (*loss).diff(y, lable);
-
-        delta = multiply(delta, (*activation).cal_activation(u, true));
-
-        d_w = dot(transpose(x), delta);
-        d_b = sum(delta, 0);
-        vector<vector<double>> d_x = dot(delta, transpose(w));
-
-        return d_x;
-    }
-};
 
 // ==============序列模型==============
 class Sequential {
 public:
-    int epoch;
-    int batch_size;
-    double learning_rate;
-    vector<Layer *> layer_list;
+    int epoch;  // 訓練次數
+    double batch_size;  // 批量大小
+    double learning_rate; // 學習率
+    LossFunc *loss; // 損失函式
+    vector<Layer *> layer_list;  // 存放網路層
 
-    Sequential(int epoch, int batch_size, double learning_rate) {
+    Sequential(int epoch, double batch_size, double learning_rate, LossFunc *loss) {
         this->epoch = epoch;
         this->batch_size = batch_size;
         this->learning_rate = learning_rate;
+        this->loss = loss;
     };
 
     // 增加層數
@@ -481,26 +436,34 @@ public:
     // 訓練
     void fit(vector<vector<double>> train_x, vector<vector<double>> train_y) {
         for (int e = 0; e < epoch; e++) {
-
             for (int b = 0; b < train_x.size(); b += batch_size) {
                 vector<vector<double>> batch_x = get_batch_data(train_x, b,
-                                                                min((int) b + batch_size, (int) train_x.size()));
+                                                                min(b + batch_size, (double) train_x.size()));
                 vector<vector<double>> batch_y = get_batch_data(train_y, b,
-                                                                min((int) b + batch_size, (int) train_x.size()));
-
+                                                                min(b + batch_size, (double) train_x.size()));
                 vector<vector<double>> output = FP(batch_x);
-                BP(batch_y);
+                BP(output, batch_y);
                 update_weight();
 
-                Layer *output_layer = layer_list[layer_list.size() - 1];
-                double loss = output_layer->get_loss(batch_y);
-                cout << loss/batch_size << endl;
+//                double loss_value = loss->undiff(output, batch_y);
+//                cout << loss_value/batch_size << endl;
+
+                cout << "Epoch:" << e << endl;
+//                show_mat(output);
+                cout << "Pre:" << endl;
+                show_mat(output);
+                cout << "Label:" << endl;
+                show_mat(batch_y);
+
+
             }
+
+
         }
     }
 
     // 將資料分成 Batchsize
-    inline vector<vector<double>> get_batch_data(vector<vector<double>> train_x, int start, int end) {
+    inline vector<vector<double>> get_batch_data(vector<vector<double>> train_x, double start, double end) {
         vector<vector<double>> result = generate_mat(end - start, train_x[0].size());
 
         for (int i = 0; i < (end - start); i++) {
@@ -520,10 +483,10 @@ public:
     }
 
     // 反向傳播
-    inline void BP(vector<vector<double>> batch_y) {
-        vector<vector<double>> delta = layer_list[layer_list.size() - 1]->BP(batch_y);
+    inline void BP(vector<vector<double>> output, vector<vector<double>> batch_y) {
+        vector<vector<double>> delta = loss->diff(output, batch_y);
 
-        for (int i = layer_list.size() - 2; i > -1; i--) {
+        for (int i = layer_list.size() - 1; i > -1; i--) {
             delta = layer_list[i]->BP(delta);
         }
 
@@ -542,14 +505,18 @@ public:
 int main() {
     srand(time(NULL));
 
-    vector<vector<double>> x = linspace(0, 6.28, 100);
-    vector<vector<double>> y = generate_y(x);
+    vector<vector<double>> x = {{0, 0, 1},
+                                {0, 1, 1},
+                                {1, 0, 1},
+                                {1, 1, 1}};
+    vector<vector<double>> y = {{0},
+                                {0},
+                                {1},
+                                {1}};
 
-    Sequential module(100, 16, 0.2);
-    module.add(new BaseLayer(1, 64, new sigmoid));
-    module.add(new BaseLayer(64, new sigmoid));
-    module.add(new BaseLayer(128, new sigmoid));
-    module.add(new OutputLayer(1, new linear, new MSE));
+    Sequential module(200, 4, 0.2, new MSE);
+    module.add(new BaseLayer(3, 1, new sigmoid));
+    module.add(new BaseLayer(1, new sigmoid));
 
     module.compile();
     module.fit(x, y);
