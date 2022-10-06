@@ -1,23 +1,27 @@
 #include <iostream>
-#include "pbPlots.hpp"
-#include "supportLib.hpp"
-
+#include <vector>
 using namespace std;
 
+class a{
+public:
+    int x;
+
+    a(int x){
+        this->x = x;
+    }
+
+    void change() const{
+        this->x = 5;
+    }
+
+};
+
+
 int main(){
-    RGBABitmapImageReference *imageRef = CreateRGBABitmapImageReference();
-    char error[10] = "error!";
 
-    vector<double> x{-2, 1, 2, 3, 4, 5};
-    vector<double> y{-2, 1, 2, 3, 4, 5};
-    vector<double> x2{-1, -1, 4, 3, 4, 5};
-    vector<double> y2{-2, 1, 5, 3, 4, 7};
+    a n2(5);
 
-    DrawScatterPlot(imageRef, 600., 400., &x, &y);
-    DrawScatterPlot(imageRef, 600., 400., &x2, &y2);
-    vector<double> *pngData = ConvertToPNG(imageRef->image);
-    WriteToFile(pngData, "plot.png");
-    DeleteImage(imageRef->image);
+    cout << n1 * n2 << endl;
 
     return 0;
 }

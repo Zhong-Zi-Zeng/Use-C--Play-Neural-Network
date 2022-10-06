@@ -444,7 +444,6 @@ public:
 
         return d_x;
     }
-
 };
 
 // ==============序列模型==============
@@ -521,7 +520,7 @@ public:
     }
 
     // 反向傳播
-    void BP(vector<vector<double>> batch_y) {
+    inline void BP(vector<vector<double>> batch_y) {
         vector<vector<double>> delta = layer_list[layer_list.size() - 1]->BP(batch_y);
 
         for (int i = layer_list.size() - 2; i > -1; i--) {
@@ -531,7 +530,7 @@ public:
     }
 
     // 更新梯度
-    void update_weight(){
+    inline void update_weight(){
         for (int i = 0; i < layer_list.size(); i++){
             layer_list[i]->w = sub(layer_list[i]->w, multiply(multiply((vector<vector<double>>) layer_list[i]->d_w,(double) learning_rate), 1. / batch_size));
             layer_list[i]->b = sub(layer_list[i]->b, multiply(multiply((vector<vector<double>>) layer_list[i]->d_b,(double) learning_rate), 1. / batch_size));
@@ -539,9 +538,6 @@ public:
     }
 
 };
-
-// ==============Batch==============
-//vector<vector<double>> get_batch
 
 int main() {
     srand(time(NULL));
@@ -551,11 +547,12 @@ int main() {
 
     Sequential module(100, 16, 0.2);
     module.add(new BaseLayer(1, 64, new sigmoid));
+    module.add(new BaseLayer(64, new sigmoid));
+    module.add(new BaseLayer(128, new sigmoid));
     module.add(new OutputLayer(1, new linear, new MSE));
 
     module.compile();
     module.fit(x, y);
-
 
     return 0;
 }
