@@ -6,7 +6,11 @@
 
 using namespace std;
 
-// ==============工具==============
+
+// ==============================================================================
+// -- 工具 -----------------------------------------------------------------------
+// ==============================================================================
+
 // 生成權重
 vector<vector<double>> generate_mat(int r, int c, int initial_value = 0, bool use_random = true) {
     vector<vector<double>> matrix(r, vector<double>(c, initial_value));
@@ -100,7 +104,7 @@ vector<vector<double>> add(vector<vector<double>> a, vector<vector<double>> b) {
                 result[i][j] = a[i][j] + b[i][j];
         }
         return result;
-    } else{
+    } else {
         for (int i = 0; i < a_row; i++) {
             for (int j = 0; j < a_col; j++) {
                 result[i][j] = a[i][j] + b[0][j];
@@ -120,6 +124,34 @@ vector<vector<double>> sub(vector<vector<double>> a, vector<vector<double>> b) {
     for (int i = 0; i < row; i++) {
         for (int j = 0; j < col; j++)
             result[i][j] = a[i][j] - b[i][j];
+    }
+
+    return result;
+}
+
+vector<vector<double>> sub(vector<vector<double>> a, double b) {
+    int row = a.size();
+    int col = a[0].size();
+
+    vector<vector<double>> result = generate_mat(row, col, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++)
+            result[i][j] = a[i][j] - b;
+    }
+
+    return result;
+}
+
+vector<vector<double>> sub(double b, vector<vector<double>> a) {
+    int row = a.size();
+    int col = a[0].size();
+
+    vector<vector<double>> result = generate_mat(row, col, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++)
+            result[i][j] = b - a[i][j];
     }
 
     return result;
@@ -182,6 +214,20 @@ vector<vector<double>> sum(vector<vector<double>> a, int axis = 0) {
     }
 }
 
+// 求ln
+vector<vector<double>> ln(vector<vector<double>> m) {
+    int row = m.size();
+    int col = m[0].size();
+    vector<vector<double>> result = generate_mat(row, col, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++)
+            result[i][j] = log(m[i][j]);
+    }
+
+    return result;
+}
+
 double total_sum(vector<vector<double>> m) {
     int row = m.size();
     int col = m[0].size();
@@ -215,7 +261,9 @@ void shape(vector<vector<double>> m) {
 }
 
 
-// ==============激活函式抽象類==============
+// ==============================================================================
+// -- 激活函式抽象類 --------------------------------------------------------------
+// ==============================================================================
 class ActivationFunc {
 public:
     virtual double undiff(double pre) = 0;
@@ -276,7 +324,10 @@ public:
     }
 };
 
-// ==============損失函式抽象類==============
+
+// ==============================================================================
+// -- 損失函式 --------------------------------------------------------------------
+// ==============================================================================
 class LossFunc {
 public:
     virtual double undiff(vector<vector<double>> pre, vector<vector<double>> label) = 0;
@@ -302,7 +353,44 @@ public:
     }
 };
 
-// ==============抽象層==============
+// ==============Binary cross entropy==============
+class Binary_cross_entropy : public LossFunc {
+public:
+    double undiff(vector<vector<double>> pre, vector<vector<double>> label) {
+        /*
+         * 公式如下：
+         * -Di * ln(Yi) - (1 - Di) * ln(1 - Yi)
+         */
+
+        vector<vector<double>> left_loss = multiply(multiply(label, ln(pre)), -1.);
+        vector<vector<double>> right_loss = multiply(sub(1., label), ln(sub(1, pre)));
+        vector<vector<double>> loss = sub(left_loss, right_loss);
+        loss = sum(loss, 0);
+
+        return loss[0][0];
+    }
+
+    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) {
+        /*
+         * 公式如下：
+         * (Yi - Di) / [Yi * (1 - Yi)]
+         */
+
+        vector<vector<double>> left_loss = sub(pre, label);
+        vector<vector<double>> right_loss = multiply(pre, sub(1., pre));
+        vector<vector<double>> o1 = generate_mat((int) pre.size(), 1, 0, false);
+
+        for (int i = 0; i < pre.size(); i++){
+            o1[i][0] = left_loss[i][0] / right_loss[i][0];
+        }
+        return o1;
+    }
+};
+
+
+// ==============================================================================
+// -- 隱藏層 ---------------------------------------------------------------------
+// ==============================================================================
 class Layer {
 public:
     int output_shape;  // 輸入維度
@@ -375,37 +463,86 @@ public:
 };
 
 
-// ==============優化器抽象類==============
-class Optimizer{
+
+// ==============================================================================
+// -- 優化器 ---------------------------------------------------------------------
+// ==============================================================================
+class Optimizer {
 public:
     double learning_rate;
-    int batch_size;
 
-    virtual void gradient_decent(vector<Layer *> layer_list, int batch_size) = 0;
+    virtual void gradient_decent(vector<Layer *> layer_list) = 0;
 };
 
-
 // ==============SGD==============
-class SGD: public Optimizer{
+class SGD : public Optimizer {
 public:
-    SGD(double learning_rate){
+    SGD(double learning_rate) {
         this->learning_rate = learning_rate;
     }
 
-    void gradient_decent(vector<Layer *> layer_list, int batch_size){
-        int layer_length = layer_list.size();
+    void gradient_decent(vector<Layer *> layer_list) {
+        /* 更新公式如下：
+         * Wt = Wt - learning_rate * d_w
+         */
 
-        for (int i = 0; i < layer_length; i++) {
-            layer_list[i]->w = sub(layer_list[i]->w, multiply(
-                    multiply((vector<vector<double>>) layer_list[i]->d_w, (double) learning_rate), (double ) 1. / batch_size));
-            layer_list[i]->b = sub(layer_list[i]->b, multiply(
-                    multiply((vector<vector<double>>) layer_list[i]->d_b, (double) learning_rate), (double ) 1. / batch_size));
+        for (int i = 0; i < layer_list.size(); i++) {
+            layer_list[i]->w = sub(layer_list[i]->w,
+                                   multiply((vector<vector<double>>) layer_list[i]->d_w, (double) learning_rate));
+            layer_list[i]->b = sub(layer_list[i]->b,
+                                   multiply((vector<vector<double>>) layer_list[i]->d_b, (double) learning_rate));
         }
     }
 };
 
+// ==============Momentum==============
+class Momentum : public Optimizer {
+public:
+    double beta = 0.9;  // Beta 為常數，通常設定為0.9
+    vector<vector<vector<double>>> last_dw;  // 用來存放上一次weight 的梯度
+    vector<vector<vector<double>>> last_db;  // 用來存放上一次bias 的梯度
 
-// ==============序列模型==============
+    Momentum(double learning_rate, double beta) {
+        this->learning_rate = learning_rate;
+        this->beta = beta;
+    }
+
+    void gradient_decent(vector<Layer *> layer_list) {
+        // 第一次進來前先將上一次的梯度初始化為0
+        if (last_dw.size() == 0 && last_db.size() == 0) {
+            for (int i = 0; i < layer_list.size(); i++) {
+                int weight_row_size = layer_list[i]->w.size();
+                int weight_col_size = layer_list[i]->w[0].size();
+                int bias_row_size = layer_list[i]->b.size();
+                int bias_col_size = layer_list[i]->b[0].size();
+
+                last_dw.push_back(generate_mat(weight_row_size, weight_col_size, 0, false));
+                last_db.push_back(generate_mat(bias_row_size, bias_col_size, 0, false));
+            }
+        }
+
+        // 更新梯度
+        for (int i = 0; i < layer_list.size(); i++) {
+            /* 更新公式如下：
+             * Vt = Beta * Vt-1 - learning_rate * d_w
+             * W = W + Vt
+             */
+            vector<vector<double>> V_w_t = multiply(last_dw[i], beta);
+            V_w_t = sub(V_w_t, multiply(layer_list[i]->d_w, learning_rate));
+            layer_list[i]->w = add(layer_list[i]->w, V_w_t);
+
+            vector<vector<double>> V_b_t = multiply(last_db[i], beta);
+            V_b_t = sub(V_b_t, multiply(layer_list[i]->d_b, learning_rate));
+            layer_list[i]->b = add(layer_list[i]->b, V_b_t);
+        }
+    }
+
+};
+
+
+// ==============================================================================
+// -- 序列模型 ----------------------------------------------------------------
+// ==============================================================================
 class Sequential {
 public:
     int epoch;  // 訓練次數
@@ -419,6 +556,7 @@ public:
         this->batch_size = batch_size;
         this->loss = loss;
         this->opt = opt;
+
     };
 
     // 增加層數
@@ -443,7 +581,7 @@ public:
     void fit(vector<vector<double>> train_x, vector<vector<double>> train_y) {
         for (int e = 0; e < epoch; e++) {
             for (int b = 0; b < train_x.size(); b += batch_size) {
-
+                // 每次訓練讀取batch size 的資料去訓練
                 vector<vector<double>> batch_x = get_batch_data(train_x, b,
                                                                 min((int) b + batch_size, (int) train_x.size()));
                 vector<vector<double>> batch_y = get_batch_data(train_y, b,
@@ -452,17 +590,12 @@ public:
                 BP(output, batch_y);
                 update_weight();
 
+                // 顯示訓練資料
                 cout << "Epoch:" << e << endl;
-//                cout << "batch_x:" << endl;
-//                show_mat(batch_x);
-//                cout << "batch_y:" << endl;
-//                show_mat(batch_y);
                 cout << "Pre:" << endl;
                 show_mat(output);
                 cout << "Label:" << endl;
                 show_mat(batch_y);
-
-
             }
         }
     }
@@ -499,7 +632,7 @@ public:
 
     // 更新權重
     inline void update_weight() {
-        opt->gradient_decent(layer_list, batch_size);
+        opt->gradient_decent(layer_list);
     }
 };
 
@@ -511,15 +644,13 @@ int main() {
                                 {1, 0, 1},
                                 {1, 1, 1}};
     vector<vector<double>> y = {{0},
-                                {0},
                                 {1},
-                                {1}};
+                                {1},
+                                {0}};
 
-    Sequential module(40000, 2, new MSE, new SGD(0.2));
+    Sequential module(400, 4, new Binary_cross_entropy, new Momentum(0.2, 0.9));
 
     module.add(new BaseLayer(3, 16, new sigmoid));
-    module.add(new BaseLayer(32, new sigmoid));
-    module.add(new BaseLayer(64, new sigmoid));
     module.add(new BaseLayer(1, new sigmoid));
 
     module.compile();
