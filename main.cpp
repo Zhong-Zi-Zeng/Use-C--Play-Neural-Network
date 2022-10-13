@@ -114,6 +114,20 @@ vector<vector<double>> add(vector<vector<double>> a, vector<vector<double>> b) {
     }
 }
 
+vector<vector<double>> add(vector<vector<double>> a, double b) {
+    int a_row = a.size();
+    int a_col = a[0].size();
+
+    vector<vector<double>> result = generate_mat(a_row, a_col, 0, false);
+
+    for (int i = 0; i < a_row; i++) {
+        for (int j = 0; j < a_col; j++)
+            result[i][j] = a[i][j] + b;
+    }
+
+    return result;
+}
+
 // 矩陣相減
 vector<vector<double>> sub(vector<vector<double>> a, vector<vector<double>> b) {
     int row = a.size();
@@ -228,6 +242,42 @@ vector<vector<double>> ln(vector<vector<double>> m) {
     return result;
 }
 
+// 求exp
+vector<vector<double>> exp(vector<vector<double>> m) {
+    int row = m.size();
+    int col = m[0].size();
+    vector<vector<double>> result = generate_mat(row, col, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++)
+            result[i][j] = std::exp(m[i][j]);
+    }
+
+    return result;
+}
+
+// 找最大值
+double maximize(vector<vector<double>> m) {
+    int row = m.size();
+    int col = m[0].size();
+    double max = 0;
+
+    vector<vector<double>> result = generate_mat(row, col, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++) {
+            if (result[i][j] > max) {
+                max = result[i][j];
+            }
+        }
+    }
+
+    return max;
+
+
+}
+
+
 double total_sum(vector<vector<double>> m) {
     int row = m.size();
     int col = m[0].size();
@@ -266,12 +316,14 @@ void shape(vector<vector<double>> m) {
 // ==============================================================================
 class ActivationFunc {
 public:
-    virtual double undiff(double pre) = 0;
+    virtual vector<vector<double>> undiff(vector<vector<double>> m) = 0;
+    virtual vector<vector<double>> diff(vector<vector<double>> m) = 0;
+};
 
-    virtual double diff(double pre) = 0;
-
-    // 計算激活函式輸出值
-    vector<vector<double>> cal_activation(vector<vector<double>> m, bool diff = false) {
+// ==============sigmoid==============
+class sigmoid : public ActivationFunc {
+public:
+    vector<vector<double>> undiff(vector<vector<double>> m) override {
         int row = m.size();
         int col = m[0].size();
 
@@ -279,7 +331,21 @@ public:
 
         for (int r = 0; r < row; r++) {
             for (int c = 0; c < col; c++) {
-                result[r][c] = diff ? this->diff(m[r][c]) : this->undiff(m[r][c]);
+                result[r][c] = 1. / (1. + exp(-m[r][c]));
+            }
+        }
+        return result;
+
+    }
+    vector<vector<double>> diff(vector<vector<double>> m) override {
+        int row = m.size();
+        int col = m[0].size();
+        vector<vector<double>> y = undiff(m);
+        vector<vector<double>> result = generate_mat(row, col);
+
+        for (int r = 0; r < row; r++) {
+            for (int c = 0; c < col; c++) {
+                result[r][c] = y[r][c] * (1. - y[r][c]);
             }
         }
         return result;
@@ -287,43 +353,88 @@ public:
 
 };
 
-// ==============sigmoid==============
-class sigmoid : public ActivationFunc {
-public:
-    double undiff(double x) {
-        return 1. / (1. + exp(-x));
-    }
-
-    double diff(double x) {
-        double output = undiff(x);
-        return output * (1. - output);
-    }
-};
-
 // ==============relu==============
 class relu : public ActivationFunc {
 public:
-    double undiff(double x) {
-        return (x > 0) ? x : 0;
-    }
+    vector<vector<double>> undiff(vector<vector<double>> m) override {
+        int row = m.size();
+        int col = m[0].size();
 
-    double diff(double x) {
-        return (x > 0) ? 1 : 0;
+        vector<vector<double>> result = generate_mat(row, col);
+
+        for (int r = 0; r < row; r++) {
+            for (int c = 0; c < col; c++) {
+                result[r][c] = (m[r][c] > 0) ? m[r][c] : 0;
+            }
+        }
+        return result;
+
+    }
+    vector<vector<double>> diff(vector<vector<double>> m) override{
+        int row = m.size();
+        int col = m[0].size();
+
+        vector<vector<double>> result = generate_mat(row, col);
+
+        for (int r = 0; r < row; r++) {
+            for (int c = 0; c < col; c++) {
+                result[r][c] = (m[r][c] > 0) ? 1 : 0;
+            }
+        }
+        return result;
     }
 };
 
 // ==============linear==============
 class linear : public ActivationFunc {
 public:
-    double undiff(double x) {
-        return x;
+    vector<vector<double>> undiff(vector<vector<double>> m) override {
+        return m;
     }
 
-    double diff(double x) {
-        return 1;
+    vector<vector<double>> diff(vector<vector<double>> m) override{
+        return generate_mat(m.size(), m[0].size(), 1, false);
     }
 };
 
+// ==============softmax==============
+class softmax : public ActivationFunc {
+public:
+    vector<vector<double>> undiff(vector<vector<double>> m) override {
+        // 把所有元素減去最大值
+        double max = maximize(m);
+        vector<vector<double>> new_m = sub(m, max);
+
+        // 對每一列求exp總和
+        vector<vector<double>> exp_sum = generate_mat(new_m.size(), 1, 0, false);
+        for (int r = 0; r < new_m.size(); r++) {
+            for (int c = 0; c < new_m[0].size(); c++) {
+                exp_sum[r][0] += std::exp(new_m[r][c]);
+            }
+        }
+
+        // 將所有元素都以exp為底
+        vector<vector<double>> exp_m = exp(new_m);
+
+        // 將每一列都除上剛剛的exp_sum
+        vector<vector<double>> result = generate_mat(new_m.size(), new_m[0].size(), 0, false);
+
+        for (int r = 0; r < m.size(); r++) {
+            for (int c = 0; c < m[0].size(); c++) {
+                result[r][c] = exp_m[r][c] / exp_sum[r][0];
+            }
+        }
+        return result;
+    }
+
+    vector<vector<double>> diff(vector<vector<double>> m) override {
+        // 回傳全為1的矩陣
+        vector<vector<double>> result = generate_mat(m.size(), m[0].size(), 1, false);
+
+        return result;
+    }
+
+};
 
 // ==============================================================================
 // -- 損失函式 --------------------------------------------------------------------
@@ -380,10 +491,56 @@ public:
         vector<vector<double>> right_loss = multiply(pre, sub(1., pre));
         vector<vector<double>> o1 = generate_mat((int) pre.size(), 1, 0, false);
 
-        for (int i = 0; i < pre.size(); i++){
+        for (int i = 0; i < pre.size(); i++) {
             o1[i][0] = left_loss[i][0] / right_loss[i][0];
         }
         return o1;
+    }
+};
+
+
+// ==============Categorical cross entropy==============
+class Categorical_crosse_entropy : public LossFunc {
+    double undiff(vector<vector<double>> pre, vector<vector<double>> label) {
+        /*
+         * 公式如下 (Add 1e-7 Avoid ln(0)):
+         * - sum(Di * ln(Yi + 0.0000001))
+         */
+        double loss = total_sum(multiply(multiply(label, ln(add(pre, 1e-7))), -1));
+
+        return loss;
+    }
+
+    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) {
+        /*
+         * 使用softmax和多分類交叉熵的話，其反向傳播公式如下:
+         *
+         * ∂L   ∂L   ∂y
+         * － = － x  －
+         * ∂u   ∂y   ∂u
+         *
+         * if i == j:
+         *       1
+         *     - － x yi x (1 - yi) = yi - 1
+         *       yi
+         * else:
+         *        1
+         *     - － x yi x yj = yj
+         *       yi
+         */
+
+        int row_size = label.size();
+        int col_size = label[0].size();
+
+        for (int r = 0; r < row_size; r++) {
+            for (int c = 0; c < col_size; c++) {
+                if (label[r][c] == 1) {
+                    pre[r][c] = pre[r][c] - 1;
+                }
+            }
+        }
+
+        return pre;
     }
 };
 
@@ -447,13 +604,13 @@ public:
         if (use_bias) {
             u = add(u, b);
         }
-        y = (*activation).cal_activation(u, false);
+        y = (*activation).undiff(u);
 
         return y;
     }
 
     vector<vector<double>> BP(vector<vector<double>> delta) {
-        delta = multiply(delta, (*activation).cal_activation(u, true));
+        delta = multiply(delta, (*activation).diff(u));
         d_w = dot(transpose(x), delta);
         d_b = sum(delta, 0);
         vector<vector<double>> d_x = dot(delta, transpose(w));
@@ -461,7 +618,6 @@ public:
         return d_x;
     }
 };
-
 
 
 // ==============================================================================
@@ -541,7 +697,7 @@ public:
 
 
 // ==============================================================================
-// -- 序列模型 ----------------------------------------------------------------
+// -- 序列模型 -------------------------------------------------------------------
 // ==============================================================================
 class Sequential {
 public:
@@ -591,11 +747,15 @@ public:
                 update_weight();
 
                 // 顯示訓練資料
-                cout << "Epoch:" << e << endl;
-                cout << "Pre:" << endl;
-                show_mat(output);
-                cout << "Label:" << endl;
-                show_mat(batch_y);
+                if (e == epoch - 1){
+                    cout << "========================" << endl;
+                    cout << "Pre:" << endl;
+                    show_mat(output);
+                    cout << "Label:" << endl;
+                    show_mat(batch_y);
+                    cout << "========================" << endl;
+                }
+
             }
         }
     }
@@ -624,7 +784,6 @@ public:
     inline void BP(vector<vector<double>> output, vector<vector<double>> batch_y) {
         vector<vector<double>> delta = loss->diff(output, batch_y);
 
-
         for (int i = layer_list.size() - 1; i > -1; i--) {
             delta = layer_list[i]->BP(delta);
         }
@@ -639,22 +798,46 @@ public:
 int main() {
     srand(time(NULL));
 
-    vector<vector<double>> x = {{0, 0, 1},
-                                {0, 1, 1},
-                                {1, 0, 1},
-                                {1, 1, 1}};
-    vector<vector<double>> y = {{0},
-                                {1},
-                                {1},
-                                {0}};
+    vector<vector<double>> x = {{0, 1, 1, 0, 0,
+                                        0, 0, 1, 0, 0,
+                                        0, 0, 1, 0, 0,
+                                        0, 0, 1, 0, 0,
+                                        0, 1, 1, 1, 0},
+                                {1, 1, 1, 1, 0,
+                                        0, 0, 0, 0, 1,
+                                        0, 1, 1, 1, 0,
+                                        1, 0, 0, 0, 0,
+                                        1, 1, 1, 1, 1},
+                                {1, 1, 1, 1, 0,
+                                        0, 0, 0, 0, 1,
+                                        0, 1, 1, 1, 0,
+                                        0, 0, 1, 0, 1,
+                                        1, 1, 1, 1, 0},
+                                {0, 0, 0, 1, 0,
+                                        0, 0, 1, 1, 0,
+                                        0, 1, 0, 1, 0,
+                                        1, 1, 1, 1, 1,
+                                        0, 0, 0, 1, 0},
+                                {1, 1, 1, 1, 1,
+                                        1, 0, 0, 0, 0,
+                                        1, 1, 1, 1, 0,
+                                        0, 0, 0, 0, 1,
+                                        1, 1, 1, 1, 0}};
 
-    Sequential module(400, 4, new Binary_cross_entropy, new Momentum(0.2, 0.9));
+    vector<vector<double>> y = {{1, 0, 0, 0, 0},
+                                {0, 1, 0, 0, 0},
+                                {0, 0, 1, 0, 0},
+                                {0, 0, 0, 1, 0},
+                                {0, 0, 0, 0, 1}};
 
-    module.add(new BaseLayer(3, 16, new sigmoid));
-    module.add(new BaseLayer(1, new sigmoid));
+    Sequential module(400, 5, new Categorical_crosse_entropy, new Momentum(0.2, 0.9));
+
+    module.add(new BaseLayer(25, 64, new sigmoid));
+    module.add(new BaseLayer(5, new softmax));
 
     module.compile();
     module.fit(x, y);
+
 
     return 0;
 }
