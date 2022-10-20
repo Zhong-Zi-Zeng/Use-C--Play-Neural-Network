@@ -317,7 +317,8 @@ void shape(vector<vector<double>> m) {
 class ActivationFunc {
 public:
     virtual vector<vector<double>> undiff(vector<vector<double>> m) = 0;
-    virtual vector<vector<double>> diff(vector<vector<double>> m) = 0;
+
+    virtual vector<vector<double>> diff(vector<vector<double>> m, vector<vector<double>> label) = 0;
 };
 
 // ==============sigmoid==============
@@ -337,7 +338,8 @@ public:
         return result;
 
     }
-    vector<vector<double>> diff(vector<vector<double>> m) override {
+
+    vector<vector<double>> diff(vector<vector<double>> m, vector<vector<double>> label) override {
         int row = m.size();
         int col = m[0].size();
         vector<vector<double>> y = undiff(m);
@@ -370,7 +372,8 @@ public:
         return result;
 
     }
-    vector<vector<double>> diff(vector<vector<double>> m) override{
+
+    vector<vector<double>> diff(vector<vector<double>> m, vector<vector<double>> label) override {
         int row = m.size();
         int col = m[0].size();
 
@@ -392,7 +395,7 @@ public:
         return m;
     }
 
-    vector<vector<double>> diff(vector<vector<double>> m) override{
+    vector<vector<double>> diff(vector<vector<double>> m, vector<vector<double>> label) override {
         return generate_mat(m.size(), m[0].size(), 1, false);
     }
 };
@@ -412,7 +415,6 @@ public:
                 exp_sum[r][0] += std::exp(new_m[r][c]);
             }
         }
-
         // 將所有元素都以exp為底
         vector<vector<double>> exp_m = exp(new_m);
 
@@ -427,9 +429,46 @@ public:
         return result;
     }
 
-    vector<vector<double>> diff(vector<vector<double>> m) override {
-        // 回傳全為1的矩陣
-        vector<vector<double>> result = generate_mat(m.size(), m[0].size(), 1, false);
+    vector<vector<double>> diff(vector<vector<double>> m, vector<vector<double>> label) override {
+        /*
+         * 使用softmax的話，其反向傳播公式如下:
+         *
+         * if i == j:
+         *     yi x (1 - yi)
+         *
+         * else:
+         *     -yi x yj
+         *
+         */
+        // 先求回softmax後的結果
+        vector<vector<double>> y = undiff(m);
+        int row_size = label.size();
+        int col_size = label[0].size();
+        vector<vector<double>> result = generate_mat(row_size, col_size, 0, false);
+
+//        show_mat(y);
+//        show_mat(label);
+
+        for (int r = 0; r < row_size; r++) {
+            // 先找出label所對應的類別
+            int maximize_index = 0;
+            for (int l = 0; l < col_size; l++) {
+                if (label[r][l] == 1) {
+                    maximize_index = l;
+                    break;
+                }
+            }
+
+            // 判斷目前softmax輸出的索引是否跟label一樣
+            for (int c = 0; c < col_size; c++) {
+                if (c == maximize_index) {
+                    result[r][c] = y[r][c] * (1. - y[r][c]);
+                } else {
+                    result[r][c] = -y[r][c] * y[r][maximize_index];
+                }
+            }
+        }
+//        show_mat(result);
 
         return result;
     }
@@ -450,7 +489,7 @@ public:
 // ==============均方誤差損失函式==============
 class MSE : public LossFunc {
 public:
-    double undiff(vector<vector<double>> pre, vector<vector<double>> label) {
+    double undiff(vector<vector<double>> pre, vector<vector<double>> label) override {
         vector<vector<double>> o1 = sub(pre, label);
         double o2 = total_sum(o1);
         o2 = (o2 * o2) / 2;
@@ -458,7 +497,7 @@ public:
         return o2;
     }
 
-    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) {
+    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) override {
         vector<vector<double>> o1 = sub(pre, label);
         return o1;
     }
@@ -467,7 +506,7 @@ public:
 // ==============Binary cross entropy==============
 class Binary_cross_entropy : public LossFunc {
 public:
-    double undiff(vector<vector<double>> pre, vector<vector<double>> label) {
+    double undiff(vector<vector<double>> pre, vector<vector<double>> label) override {
         /*
          * 公式如下：
          * -Di * ln(Yi) - (1 - Di) * ln(1 - Yi)
@@ -481,7 +520,7 @@ public:
         return loss[0][0];
     }
 
-    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) {
+    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) override {
         /*
          * 公式如下：
          * (Yi - Di) / [Yi * (1 - Yi)]
@@ -501,46 +540,32 @@ public:
 
 // ==============Categorical cross entropy==============
 class Categorical_crosse_entropy : public LossFunc {
-    double undiff(vector<vector<double>> pre, vector<vector<double>> label) {
+    double undiff(vector<vector<double>> pre, vector<vector<double>> label) override {
         /*
          * 公式如下 (Add 1e-7 Avoid ln(0)):
          * - sum(Di * ln(Yi + 0.0000001))
          */
         double loss = total_sum(multiply(multiply(label, ln(add(pre, 1e-7))), -1));
-
         return loss;
     }
 
-    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) {
-        /*
-         * 使用softmax和多分類交叉熵的話，其反向傳播公式如下:
-         *
-         * ∂L   ∂L   ∂y
-         * － = － x  －
-         * ∂u   ∂y   ∂u
-         *
-         * if i == j:
-         *       1
-         *     - － x yi x (1 - yi) = yi - 1
-         *       yi
-         * else:
-         *        1
-         *     - － x yi x yj = yj
-         *       yi
-         */
-
+    vector<vector<double>> diff(vector<vector<double>> pre, vector<vector<double>> label) override {
         int row_size = label.size();
         int col_size = label[0].size();
+        vector<vector<double>> result;
 
         for (int r = 0; r < row_size; r++) {
             for (int c = 0; c < col_size; c++) {
+                // 找出label對應的類別
+                // -ln(yi) 微分結果剛好等於 - 1 / yi，把每一列都填入此數值
                 if (label[r][c] == 1) {
-                    pre[r][c] = pre[r][c] - 1;
+                    result.push_back(vector<double>(col_size, -1. / pre[r][c]));
+                    break;
                 }
             }
         }
 
-        return pre;
+        return result;
     }
 };
 
@@ -564,8 +589,9 @@ public:
     vector<vector<double>> d_b; // Bias的梯度
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
-    virtual vector<vector<double>> FP(vector<vector<double>>) = 0; // 前向傳播
-    virtual vector<vector<double>> BP(vector<vector<double>>) = 0; // 反向傳播
+    virtual vector<vector<double>> FP(vector<vector<double>>, bool training) = 0; // 前向傳播
+    virtual vector<vector<double>>
+    BP(vector<vector<double>>, vector<vector<double>> label, bool training) = 0; // 反向傳播
 };
 
 // ==============隱藏層==============
@@ -591,12 +617,12 @@ public:
     }
 
 
-    void set_weight_bias() {
+    void set_weight_bias() override {
         w = generate_mat(input_shape, output_shape);
         b = generate_mat(1, output_shape);
     }
 
-    vector<vector<double>> FP(vector<vector<double>> x) {
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
         this->x = x;
 
         u = dot(x, w);
@@ -609,8 +635,8 @@ public:
         return y;
     }
 
-    vector<vector<double>> BP(vector<vector<double>> delta) {
-        delta = multiply(delta, (*activation).diff(u));
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
+        delta = multiply(delta, (*activation).diff(u, label));
         d_w = dot(transpose(x), delta);
         d_b = sum(delta, 0);
         vector<vector<double>> d_x = dot(delta, transpose(w));
@@ -619,6 +645,58 @@ public:
     }
 };
 
+// ==============Dropout層==============
+class Dropout : public Layer {
+public:
+    double prob; // 丟棄概率
+
+    Dropout(double prob) {
+        this->prob = prob;
+    }
+
+    void set_weight_bias() override {
+        this->output_shape = input_shape;
+    }
+
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
+        this->x = x;
+
+        // 如果不是在訓練過程，則直接返回輸入值
+        if (training == false) {
+            x = multiply(x, 1. - prob);
+            return x;
+        } else {
+            // 初始化權重
+            if (w.size() == 0) {
+                // 取得輸入x的shape
+                int input_row_size = x.size();
+                int input_col_size = x[0].size();
+                w = generate_mat(input_row_size, input_col_size);
+            }
+
+            // 設置權重，若隨機數小於設置概率則將權重設為0，否則為1
+            for (int r = 0; r < w.size(); r++) {
+                for (int c = 0; c < w[0].size(); c++) {
+                    double rand_num = rand() / (RAND_MAX + 1.0);
+                    w[r][c] = (rand_num < prob) ? 0 : 1;
+                }
+            }
+
+            // 將輸入與w相乘
+            y = multiply(x, w);
+
+            return y;
+        }
+    }
+
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
+        if (training == false){
+            return delta;
+        }else{
+            return multiply(delta, w);
+        }
+    }
+};
 
 // ==============================================================================
 // -- 優化器 ---------------------------------------------------------------------
@@ -637,16 +715,21 @@ public:
         this->learning_rate = learning_rate;
     }
 
-    void gradient_decent(vector<Layer *> layer_list) {
+    void gradient_decent(vector<Layer *> layer_list) override {
         /* 更新公式如下：
          * Wt = Wt - learning_rate * d_w
          */
 
         for (int i = 0; i < layer_list.size(); i++) {
+            // 跳過dropout層
+            if (layer_list[i]->b.size() == 0){
+                continue;
+            }
             layer_list[i]->w = sub(layer_list[i]->w,
                                    multiply((vector<vector<double>>) layer_list[i]->d_w, (double) learning_rate));
             layer_list[i]->b = sub(layer_list[i]->b,
                                    multiply((vector<vector<double>>) layer_list[i]->d_b, (double) learning_rate));
+
         }
     }
 };
@@ -663,10 +746,17 @@ public:
         this->beta = beta;
     }
 
-    void gradient_decent(vector<Layer *> layer_list) {
+    void gradient_decent(vector<Layer *> layer_list) override {
         // 第一次進來前先將上一次的梯度初始化為0
         if (last_dw.size() == 0 && last_db.size() == 0) {
             for (int i = 0; i < layer_list.size(); i++) {
+                // 若是遇到dropout層，則加一個空陣列，方便後面計算
+                if (layer_list[i]->b.size() == 0){
+                    last_dw.push_back(generate_mat(0, 0, 0, false));
+                    last_db.push_back(generate_mat(0, 0, 0, false));
+                    continue;
+                }
+
                 int weight_row_size = layer_list[i]->w.size();
                 int weight_col_size = layer_list[i]->w[0].size();
                 int bias_row_size = layer_list[i]->b.size();
@@ -677,18 +767,26 @@ public:
             }
         }
 
+
+
         // 更新梯度
         for (int i = 0; i < layer_list.size(); i++) {
             /* 更新公式如下：
              * Vt = Beta * Vt-1 - learning_rate * d_w
              * W = W + Vt
              */
+            // 跳過dropout層
+            if (layer_list[i]->b.size() == 0){
+                continue;
+            }
             vector<vector<double>> V_w_t = multiply(last_dw[i], beta);
             V_w_t = sub(V_w_t, multiply(layer_list[i]->d_w, learning_rate));
+            last_dw[i] = V_w_t;
             layer_list[i]->w = add(layer_list[i]->w, V_w_t);
 
             vector<vector<double>> V_b_t = multiply(last_db[i], beta);
             V_b_t = sub(V_b_t, multiply(layer_list[i]->d_b, learning_rate));
+            last_db[i] = V_b_t;
             layer_list[i]->b = add(layer_list[i]->b, V_b_t);
         }
     }
@@ -747,12 +845,14 @@ public:
                 update_weight();
 
                 // 顯示訓練資料
-                if (e == epoch - 1){
+                if (e == epoch - 1) {
                     cout << "========================" << endl;
                     cout << "Pre:" << endl;
                     show_mat(output);
                     cout << "Label:" << endl;
                     show_mat(batch_y);
+                    cout << "Loss:" << endl;
+                    cout << (*loss).undiff(output, batch_y) << endl;
                     cout << "========================" << endl;
                 }
 
@@ -770,22 +870,37 @@ public:
         return result;
     }
 
+    // 驗證
+    void evaluate(vector<vector<double>> val_x, vector<vector<double>> val_y) {
+        vector<vector<double>> output = FP(val_x, false);
+
+        cout << "========================" << endl;
+        cout << "Val Result:" << endl;
+        cout << "Pre:" << endl;
+        show_mat(output);
+        cout << "Label:" << endl;
+        show_mat(val_y);
+        cout << "Loss:" << endl;
+        cout << (*loss).undiff(output, val_y) << endl;
+        cout << "========================" << endl;
+    }
+
     // 前向傳播
-    vector<vector<double>> FP(vector<vector<double>> batch_x) {
+    vector<vector<double>> FP(vector<vector<double>> batch_x, bool training = true) {
         vector<vector<double>> output = batch_x;
 
         for (int i = 0; i < layer_list.size(); i++) {
-            output = layer_list[i]->FP(output);
+            output = layer_list[i]->FP(output, training);
         }
         return output;
     }
 
     // 反向傳播
-    inline void BP(vector<vector<double>> output, vector<vector<double>> batch_y) {
+    inline void BP(vector<vector<double>> output, vector<vector<double>> batch_y, bool training = true) {
         vector<vector<double>> delta = loss->diff(output, batch_y);
 
         for (int i = layer_list.size() - 1; i > -1; i--) {
-            delta = layer_list[i]->BP(delta);
+            delta = layer_list[i]->BP(delta, batch_y, training);
         }
     }
 
@@ -796,48 +911,103 @@ public:
 };
 
 int main() {
-    srand(time(NULL));
+    srand(1);
+    // 超參數
+    int EPOCH = 5000; // 學習次數
+    int BATCH_SIZE = 5;  // 批量大小
+    double LEARNING_RATE = 0.001;  // 學習率
+    double BETA = 0.9; // 用於Momentum 優化方法使用
+    double DROPOUT_PROB = 0.5; // dropout概率
 
-    vector<vector<double>> x = {{0, 1, 1, 0, 0,
-                                        0, 0, 1, 0, 0,
-                                        0, 0, 1, 0, 0,
-                                        0, 0, 1, 0, 0,
-                                        0, 1, 1, 1, 0},
-                                {1, 1, 1, 1, 0,
-                                        0, 0, 0, 0, 1,
-                                        0, 1, 1, 1, 0,
-                                        1, 0, 0, 0, 0,
-                                        1, 1, 1, 1, 1},
-                                {1, 1, 1, 1, 0,
-                                        0, 0, 0, 0, 1,
-                                        0, 1, 1, 1, 0,
-                                        0, 0, 1, 0, 1,
-                                        1, 1, 1, 1, 0},
-                                {0, 0, 0, 1, 0,
-                                        0, 0, 1, 1, 0,
-                                        0, 1, 0, 1, 0,
-                                        1, 1, 1, 1, 1,
-                                        0, 0, 0, 1, 0},
-                                {1, 1, 1, 1, 1,
-                                        1, 0, 0, 0, 0,
-                                        1, 1, 1, 1, 0,
-                                        0, 0, 0, 0, 1,
-                                        1, 1, 1, 1, 0}};
+    // 訓練資料
+    vector<vector<double>> train_x = {{0, 1, 1, 0, 0,
+                                              0, 0, 1, 0, 0,
+                                              0, 0, 1, 0, 0,
+                                              0, 0, 1, 0, 0,
+                                              0, 1, 1, 1, 0},
+                                      {1, 1, 1, 1, 0,
+                                              0, 0, 0, 0, 1,
+                                              0, 1, 1, 1, 0,
+                                              1, 0, 0, 0, 0,
+                                              1, 1, 1, 1, 1},
+                                      {1, 1, 1, 1, 0,
+                                              0, 0, 0, 0, 1,
+                                              0, 1, 1, 1, 0,
+                                              0, 0, 1, 0, 1,
+                                              1, 1, 1, 1, 0},
+                                      {0, 0, 0, 1, 0,
+                                              0, 0, 1, 1, 0,
+                                              0, 1, 0, 1, 0,
+                                              1, 1, 1, 1, 1,
+                                              0, 0, 0, 1, 0},
+                                      {1, 1, 1, 1, 1,
+                                              1, 0, 0, 0, 0,
+                                              1, 1, 1, 1, 0,
+                                              0, 0, 0, 0, 1,
+                                              1, 1, 1, 1, 0}};
 
-    vector<vector<double>> y = {{1, 0, 0, 0, 0},
-                                {0, 1, 0, 0, 0},
-                                {0, 0, 1, 0, 0},
-                                {0, 0, 0, 1, 0},
-                                {0, 0, 0, 0, 1}};
+    vector<vector<double>> train_y = {{1, 0, 0, 0, 0},
+                                      {0, 1, 0, 0, 0},
+                                      {0, 0, 1, 0, 0},
+                                      {0, 0, 0, 1, 0},
+                                      {0, 0, 0, 0, 1}};
 
-    Sequential module(400, 5, new Categorical_crosse_entropy, new Momentum(0.2, 0.9));
 
-    module.add(new BaseLayer(25, 64, new sigmoid));
+    // 驗證資料
+    vector<vector<double>> val_x = {
+            {
+                    0, 0, 1, 1, 0,
+                    0, 0, 1, 1, 0,
+                    0, 1, 0, 1, 0,
+                    0, 0, 0, 1, 0,
+                    0, 1, 1, 1, 0},
+            {
+                    1, 1, 1, 1, 0,
+                    0, 0, 0, 0, 1,
+                    0, 1, 1, 1, 0,
+                    1, 0, 0, 0, 1,
+                    1, 1, 1, 1, 1},
+            {
+                    1, 1, 1, 1, 0,
+                    0, 0, 0, 0, 1,
+                    0, 1, 1, 1, 0,
+                    1, 0, 0, 0, 1,
+                    1, 1, 1, 1, 0},
+            {
+                    0, 1, 1, 1, 0,
+                    0, 1, 0, 0, 0,
+                    0, 1, 1, 1, 0,
+                    0, 0, 0, 1, 1,
+                    0, 1, 1, 1, 0},
+            {
+                    0, 1, 1, 1, 1,
+                    0, 1, 0, 0, 0,
+                    0, 1, 1, 1, 0,
+                    0, 0, 0, 1, 0,
+                    1, 1, 1, 1, 0}
+    };
+
+    vector<vector<double>> val_y = {{1, 0, 0, 0, 0},
+                                    {0, 1, 0, 0, 0},
+                                    {0, 0, 1, 0, 0},
+                                    {0, 0, 0, 1, 0},
+                                    {0, 0, 0, 0, 1}};
+
+
+    // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
+    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new SGD(LEARNING_RATE));
+
+    module.add(new BaseLayer(25, 32, new relu));
+    module.add(new Dropout(DROPOUT_PROB));
+    module.add(new BaseLayer(128, new relu));
     module.add(new BaseLayer(5, new softmax));
-
     module.compile();
-    module.fit(x, y);
 
+    // 訓練
+    module.fit(train_x, train_y);
+
+    // 驗證
+    module.evaluate(val_x, val_y);
 
     return 0;
 }
