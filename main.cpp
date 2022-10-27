@@ -446,8 +446,8 @@ public:
         int col_size = label[0].size();
         vector<vector<double>> result = generate_mat(row_size, col_size, 0, false);
 
-//        show_mat(y);
-//        show_mat(label);
+        //        show_mat(y);
+        //        show_mat(label);
 
         for (int r = 0; r < row_size; r++) {
             // 先找出label所對應的類別
@@ -468,7 +468,7 @@ public:
                 }
             }
         }
-//        show_mat(result);
+        //        show_mat(result);
 
         return result;
     }
@@ -690,9 +690,9 @@ public:
     }
 
     vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
-        if (training == false){
+        if (training == false) {
             return delta;
-        }else{
+        } else {
             return multiply(delta, w);
         }
     }
@@ -722,7 +722,7 @@ public:
 
         for (int i = 0; i < layer_list.size(); i++) {
             // 跳過dropout層
-            if (layer_list[i]->b.size() == 0){
+            if (layer_list[i]->b.size() == 0) {
                 continue;
             }
             layer_list[i]->w = sub(layer_list[i]->w,
@@ -751,7 +751,7 @@ public:
         if (last_dw.size() == 0 && last_db.size() == 0) {
             for (int i = 0; i < layer_list.size(); i++) {
                 // 若是遇到dropout層，則加一個空陣列，方便後面計算
-                if (layer_list[i]->b.size() == 0){
+                if (layer_list[i]->b.size() == 0) {
                     last_dw.push_back(generate_mat(0, 0, 0, false));
                     last_db.push_back(generate_mat(0, 0, 0, false));
                     continue;
@@ -776,7 +776,7 @@ public:
              * W = W + Vt
              */
             // 跳過dropout層
-            if (layer_list[i]->b.size() == 0){
+            if (layer_list[i]->b.size() == 0) {
                 continue;
             }
             vector<vector<double>> V_w_t = multiply(last_dw[i], beta);
@@ -916,7 +916,6 @@ int main() {
     int EPOCH = 5000; // 學習次數
     int BATCH_SIZE = 5;  // 批量大小
     double LEARNING_RATE = 0.001;  // 學習率
-    double BETA = 0.9; // 用於Momentum 優化方法使用
     double DROPOUT_PROB = 0.5; // dropout概率
 
     // 訓練資料
@@ -936,10 +935,10 @@ int main() {
                                               0, 0, 1, 0, 1,
                                               1, 1, 1, 1, 0},
                                       {0, 0, 0, 1, 0,
-                                              0, 0, 1, 1, 0,
-                                              0, 1, 0, 1, 0,
-                                              1, 1, 1, 1, 1,
-                                              0, 0, 0, 1, 0},
+                                          0, 0, 1, 1, 0,
+                                          0, 1, 0, 1, 0,
+                                          1, 1, 1, 1, 1,
+                                          0, 0, 0, 1, 0},
                                       {1, 1, 1, 1, 1,
                                               1, 0, 0, 0, 0,
                                               1, 1, 1, 1, 0,

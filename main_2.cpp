@@ -77,17 +77,10 @@ public:
 
 
 
-
 int main(){
-    srand(time(NULL));
+    srand(2);
 
-    Matrix<double, 3, 2> w {4};
-
-    w.show_mat();
-
-
-    Matrix *r = w + 1;
-    r.show_mat();
+    cout << rand();
 
     return 0;
 }
