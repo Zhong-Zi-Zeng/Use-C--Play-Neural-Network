@@ -4,4 +4,4 @@ project(for_c__)
 set(CMAKE_CXX_STANDARD 14)
 
 add_executable(for_c__
-        main.cpp)
+        new_version_nn.cpp)

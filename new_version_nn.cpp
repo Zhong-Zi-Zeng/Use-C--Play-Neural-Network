@@ -16,8 +16,12 @@ using namespace std;
 class Matrix {
 public:
     double **matrix;
-    int row;
-    int col;
+    int row = 0;
+    int col = 0;
+
+    Matrix(){
+
+    }
 
     template<size_t row, size_t col>
     Matrix(double (&arr)[row][col]){
@@ -382,7 +386,7 @@ public:
         return result;
     }
 
-    Matrix sum(int axis = 0) {
+    Matrix sum(int axis) {
         /*!
          * 向指定軸求和。
          * ex:
@@ -645,11 +649,12 @@ class softmax : public ActivationFunc {
 public:
     Matrix undiff(Matrix m) override {
         // 把所有元素減去最大值
-        double max = m.maximize();
-        Matrix new_m = m - max;
+        double max_num = m.maximize();
+        Matrix new_m = m - max_num;
 
         // 對每一列求exp總和
         Matrix exp_sum(new_m.row, 1, 0);
+
         for (int r = 0; r < new_m.row; r++) {
             for (int c = 0; c < new_m.col; c++) {
                 exp_sum.matrix[r][0] += std::exp(new_m.matrix[r][c]);
@@ -726,15 +731,15 @@ public:
 class MSE : public LossFunc {
 public:
     double undiff(Matrix pre, Matrix label) override {
-        Matrix o1 = sub(pre, label);
-        double o2 = total_sum(o1);
+        Matrix o1 = pre - label;
+        double o2 = o1.sum();
         o2 = (o2 * o2) / 2;
 
         return o2;
     }
 
     Matrix diff(Matrix pre, Matrix label) override {
-        Matrix o1 = sub(pre, label);
+        Matrix o1 = pre - label;
         return o1;
     }
 };
@@ -747,13 +752,13 @@ public:
          * 公式如下：
          * -Di * ln(Yi) - (1 - Di) * ln(1 - Yi)
          */
+        Matrix left_loss = -1 * label * Matrix::ln(pre);
+        Matrix right_loss = (1 - label) * Matrix::ln((1 - pre));
 
-        Matrix left_loss = multiply(multiply(label, ln(pre)), -1.);
-        Matrix right_loss = multiply(sub(1., label), ln(sub(1, pre)));
-        Matrix loss = sub(left_loss, right_loss);
-        loss = sum(loss, 0);
+        Matrix loss_mat = left_loss - right_loss;
+        double loss = loss_mat.sum();
 
-        return loss[0][0];
+        return loss;
     }
 
     Matrix diff(Matrix pre, Matrix label) override {
@@ -762,14 +767,8 @@ public:
          * (Yi - Di) / [Yi * (1 - Yi)]
          */
 
-        Matrix left_loss = sub(pre, label);
-        Matrix right_loss = multiply(pre, sub(1., pre));
-        Matrix o1 = generate_mat((int) pre.size(), 1, 0, false);
-
-        for (int i = 0; i < pre.size(); i++) {
-            o1[i][0] = left_loss[i][0] / right_loss[i][0];
-        }
-        return o1;
+        Matrix loss_mat = (pre - label) / (pre * (1 - pre));
+        return loss_mat;
     }
 };
 
@@ -781,23 +780,32 @@ class Categorical_crosse_entropy : public LossFunc {
          * 公式如下 (Add 1e-7 Avoid ln(0)):
          * - sum(Di * ln(Yi + 0.0000001))
          */
-        double loss = total_sum(multiply(multiply(label, ln(add(pre, 1e-7))), -1));
+        Matrix loss_mat = label * Matrix::ln(pre + 1e-7);
+        double loss = loss_mat.sum();
+
         return loss;
     }
 
     Matrix diff(Matrix pre, Matrix label) override {
-        int row_size = label.size();
-        int col_size = label[0].size();
-        Matrix result;
+        int row_size = label.row;
+        int col_size = label.col;
+        Matrix result(row_size, col_size, 0);
 
         for (int r = 0; r < row_size; r++) {
+            // 用來存訪label對應的類別
+            int cls;
+
+            // 找出label對應的類別
             for (int c = 0; c < col_size; c++) {
-                // 找出label對應的類別
-                // -ln(yi) 微分結果剛好等於 - 1 / yi，把每一列都填入此數值
-                if (label[r][c] == 1) {
-                    result.push_back(vector<double>(col_size, -1. / pre[r][c]));
+                if (label.matrix[r][c] == 1) {
+                    cls = c;
                     break;
                 }
+            }
+
+            // -ln(yi) 微分結果剛好等於 - 1 / yi，把每一列都填入此數值
+            for(int c = 0; c<col_size; c++){
+                result.matrix[r][c] = - 1 / pre.matrix[r][cls];
             }
         }
 
@@ -809,6 +817,7 @@ class Categorical_crosse_entropy : public LossFunc {
 // ==============================================================================
 // -- 隱藏層 ---------------------------------------------------------------------
 // ==============================================================================
+template <typename T>
 class Layer {
 public:
     int output_shape;  // 輸入維度
@@ -825,13 +834,12 @@ public:
     Matrix d_b; // Bias的梯度
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
-    virtual Matrix FP(Matrix, bool training) = 0; // 前向傳播
-    virtual Matrix
-    BP(Matrix, Matrix label, bool training) = 0; // 反向傳播
+    virtual Matrix FP(T, bool training) = 0; // 前向傳播
+    virtual Matrix BP(T, Matrix label, bool training) = 0; // 反向傳播
 };
 
 // ==============隱藏層==============
-class BaseLayer : public Layer {
+class BaseLayer : public Layer<Matrix> {
 public:
     BaseLayer(int input_shape, int output_shape, ActivationFunc *activation, bool use_bias = true) {
         init(input_shape, output_shape, activation, use_bias);
@@ -854,17 +862,17 @@ public:
 
 
     void set_weight_bias() override {
-        w = generate_mat(input_shape, output_shape);
-        b = generate_mat(1, output_shape);
+        w = Matrix(input_shape, output_shape);
+        b = Matrix(1, output_shape);
     }
 
     Matrix FP(Matrix x, bool training) override {
         this->x = x;
 
-        u = dot(x, w);
+        u = x.dot(w);
 
         if (use_bias) {
-            u = add(u, b);
+            u = u + b;
         }
         y = (*activation).undiff(u);
 
@@ -872,17 +880,18 @@ public:
     }
 
     Matrix BP(Matrix delta, Matrix label, bool training) override {
-        delta = multiply(delta, (*activation).diff(u, label));
-        d_w = dot(transpose(x), delta);
-        d_b = sum(delta, 0);
-        Matrix d_x = dot(delta, transpose(w));
+        delta = delta * (*activation).diff(u, label);
+
+        d_w = x.transpose().dot(delta);
+        d_b = delta.sum(0);
+        Matrix d_x = delta.dot(w.transpose());
 
         return d_x;
     }
 };
 
 // ==============Dropout層==============
-class Dropout : public Layer {
+class Dropout : public Layer<Matrix> {
 public:
     double prob; // 丟棄概率
 
@@ -899,27 +908,25 @@ public:
 
         // 如果不是在訓練過程，則直接返回輸入值
         if (training == false) {
-            x = multiply(x, 1. - prob);
+            x = x * (1. - prob);
             return x;
         } else {
             // 初始化權重
-            if (w.size() == 0) {
+            if (w.row == 0) {
                 // 取得輸入x的shape
-                int input_row_size = x.size();
-                int input_col_size = x[0].size();
-                w = generate_mat(input_row_size, input_col_size);
+                w = Matrix(x.row, x.col, 0);
             }
 
             // 設置權重，若隨機數小於設置概率則將權重設為0，否則為1
-            for (int r = 0; r < w.size(); r++) {
-                for (int c = 0; c < w[0].size(); c++) {
+            for (int r = 0; r < w.row; r++) {
+                for (int c = 0; c < w.col; c++) {
                     double rand_num = rand() / (RAND_MAX + 1.0);
-                    w[r][c] = (rand_num < prob) ? 0 : 1;
+                    w.matrix[r][c] = (rand_num < prob) ? 0 : 1;
                 }
             }
 
             // 將輸入與w相乘
-            y = multiply(x, w);
+            y = x * w;
 
             return y;
         }
@@ -929,7 +936,7 @@ public:
         if (training == false){
             return delta;
         }else{
-            return multiply(delta, w);
+            return delta * w;
         }
     }
 };
