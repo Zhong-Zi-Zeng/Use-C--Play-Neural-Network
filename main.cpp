@@ -26,6 +26,16 @@ vector<vector<double>> generate_mat(int r, int c, int initial_value = 0, bool us
     return matrix;
 }
 
+// 生成權重
+vector<vector<vector<vector<double>>>> generate_mat(int b, int r, int c, int n, double initial_value = 0) {
+    vector<vector<vector<vector<double>>>> matrix(b, vector<vector<vector<double>>>(r, vector<vector<double>>(c,
+                                                                                                              vector<double>(
+                                                                                                                      n,
+                                                                                                                      initial_value))));
+
+    return matrix;
+}
+
 // 點積運算
 vector<vector<double>> dot(vector<vector<double>> a, vector<vector<double>> b) {
     int a_row_size = a.size();
@@ -104,10 +114,17 @@ vector<vector<double>> add(vector<vector<double>> a, vector<vector<double>> b) {
                 result[i][j] = a[i][j] + b[i][j];
         }
         return result;
-    } else {
+    } else if (a_col == b_col && b_row == 1) {
         for (int i = 0; i < a_row; i++) {
             for (int j = 0; j < a_col; j++) {
                 result[i][j] = a[i][j] + b[0][j];
+            }
+        }
+        return result;
+    } else{
+        for (int i = 0; i < a_row; i++) {
+            for (int j = 0; j < a_col; j++) {
+                result[i][j] = a[i][j] + b[i][0];
             }
         }
         return result;
@@ -571,7 +588,7 @@ class Categorical_crosse_entropy : public LossFunc {
 
 
 // ==============================================================================
-// -- 隱藏層 ---------------------------------------------------------------------
+// -- 神經網路層 ---------------------------------------------------------------------
 // ==============================================================================
 class Layer {
 public:
@@ -580,6 +597,16 @@ public:
     bool use_bias; // 是否使用偏置值
     ActivationFunc *activation; // 激活函式
     LossFunc *loss; // 損失函式
+    string layer_name; // 網路層名稱
+    int layer_id; // 網路層編號
+    int batch_size; // 照片數量
+    int channel; // 通道數量
+    int img_height; // 圖片高度
+    int img_width; // 圖片寬度
+    int filters; // 卷積核數量
+    int k_size; // 卷積核大小
+    int output_height; // 輸出圖片高度
+    int output_width; // 輸出圖片寬度
     vector<vector<double>> w;  // Weight
     vector<vector<double>> b;  // Bias
     vector<vector<double>> x;  // 輸入
@@ -589,9 +616,9 @@ public:
     vector<vector<double>> d_b; // Bias的梯度
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
-    virtual vector<vector<double>> FP(vector<vector<double>>, bool training) = 0; // 前向傳播
-    virtual vector<vector<double>>
-    BP(vector<vector<double>>, vector<vector<double>> label, bool training) = 0; // 反向傳播
+    virtual vector<vector<double>> FP(vector<vector<double>> x, bool training) = 0;
+    virtual vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) = 0;
+    virtual vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) = 0;
 };
 
 // ==============隱藏層==============
@@ -610,6 +637,7 @@ public:
         this->output_shape = output_shape;
         this->use_bias = use_bias;
         this->activation = activation;
+        layer_name = "BaseLayer";
     }
 
     void init(int output_shape, ActivationFunc *activation, bool use_bias = true) {
@@ -622,7 +650,7 @@ public:
         b = generate_mat(1, output_shape);
     }
 
-    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override{
         this->x = x;
 
         u = dot(x, w);
@@ -634,8 +662,7 @@ public:
 
         return y;
     }
-
-    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override{
         delta = multiply(delta, (*activation).diff(u, label));
         d_w = dot(transpose(x), delta);
         d_b = sum(delta, 0);
@@ -645,20 +672,131 @@ public:
     }
 };
 
+
+class ConvolutionLayer : public Layer {
+public:
+    vector<vector<double>> img_2d; // 用來存放轉換完畢後的2維影像
+
+    ConvolutionLayer(int batch_size, int channel, int img_height, int img_width, int filters, int k_size,
+                     ActivationFunc *activation, bool use_bias = true) {
+        init(batch_size, channel, img_height, img_width, filters, k_size, activation, use_bias);
+    }
+
+    ConvolutionLayer(int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
+        init(filters, k_size, activation, use_bias);
+    }
+
+    void init(int batch_size, int channel, int img_height, int img_width, int filters, int k_size,
+              ActivationFunc *activation = new sigmoid, bool use_bias = true) {
+        this->batch_size = batch_size;
+        this->channel = channel;
+        this->img_height = img_height;
+        this->img_width = img_width;
+        this->filters = filters;
+        this->k_size = k_size;
+        this->output_height = (img_height - k_size) + 1;
+        this->output_width = (img_width - k_size) + 1;
+        this->use_bias = use_bias;
+        this->activation = activation;
+        layer_name = "ConvolutionLayer";
+    }
+
+    void init(int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
+        init(batch_size, channel, img_height, img_width, filters, k_size, activation, use_bias);
+    }
+
+    void set_weight_bias() override {
+        this->output_height = (img_height - k_size) + 1;
+        this->output_width = (img_width - k_size) + 1;
+        w = generate_mat(filters, channel * k_size * k_size);
+        b = generate_mat(filters, 1);
+    }
+
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override{
+
+    }
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) {
+
+    };
+
+    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) {
+        img_2d = im2col(x);
+        u = dot(w, img_2d);
+
+        if (use_bias) {
+            u = add(u, b);
+        }
+
+        y = (*activation).undiff(u);
+
+        return img_reshape(y);
+    }
+
+//    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) {};
+
+    vector<vector<double>> im2col(vector<vector<vector<vector<double>>>> img) {
+        /** @brief 將輸入圖片轉為二維矩陣形式.
+          * @param img 四維圖像
+          * @param k_size  卷積核大小
+          * @return 轉換完畢後的二維矩陣. */
+
+        vector<vector<double>> result = generate_mat(channel * k_size * k_size,
+                                                     batch_size * output_height * output_width, 0);
+
+        for (int c = 0; c < result[0].size(); c++) {
+            for (int r = 0; r < result.size(); r++) {
+                int img_batch = c / (output_height * output_width); // 目前到哪張圖
+                int img_channel = r / (k_size * k_size); // 目前到哪個通道
+                int img_r = (r / k_size) % k_size + (c / output_width) % output_width; // 對應到原圖的row座標
+                int img_c = r % k_size + c % output_height;  // 對應到原圖的col座標
+
+                result[r][c] = img[img_batch][img_channel][img_r][img_c];
+            }
+        }
+
+        return result;
+    }
+
+    vector<vector<vector<vector<double>>>> img_reshape(vector<vector<double>> img_2d) {
+        /** @brief 將二維圖片轉換回原四維圖片 (batch_size, channel, output_height, output_width).
+          * @param img 二維圖像
+          * @return 轉換完畢後的四維圖片. */
+
+        int row_size = img_2d.size();
+        int col_size = img_2d[0].size();
+
+        vector<vector<vector<vector<double>>>> result = generate_mat(batch_size, filters, output_height, output_width);
+
+        for (int r = 0; r < row_size; r++) {
+            for (int c = 0; c < col_size; c++) {
+                int img_batch = c / (output_width * output_height); // 對應到四維圖像的哪張圖
+                int img_r = (c / output_height) % output_height; // 對應到四維圖像的row座標
+                int img_c = c % output_width; // 對應到四維圖像的col座標
+
+                result[img_batch][r][img_r][img_c] = img_2d[r][c];
+            }
+        }
+
+        return result;
+    }
+};
+
+
 // ==============Dropout層==============
-class Dropout : public Layer {
+class DropoutLayer : public Layer {
 public:
     double prob; // 丟棄概率
 
-    Dropout(double prob) {
+    DropoutLayer(double prob) {
         this->prob = prob;
+        layer_name = "DropoutLayer";
     }
 
     void set_weight_bias() override {
         this->output_shape = input_shape;
     }
 
-    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
+    vector<vector<double>> FP(vector<vector<double>> x, bool training)  override{
         this->x = x;
 
         // 如果不是在訓練過程，則直接返回輸入值
@@ -689,7 +827,7 @@ public:
         }
     }
 
-    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override{
         if (training == false) {
             return delta;
         } else {
@@ -751,7 +889,7 @@ public:
         if (last_dw.size() == 0 && last_db.size() == 0) {
             for (int i = 0; i < layer_list.size(); i++) {
                 // 若是遇到dropout層，則加一個空陣列，方便後面計算
-                if (layer_list[i]->b.size() == 0) {
+                if (layer_list[i]->layer_name == "DropoutLayer") {
                     last_dw.push_back(generate_mat(0, 0, 0, false));
                     last_db.push_back(generate_mat(0, 0, 0, false));
                     continue;
@@ -767,8 +905,6 @@ public:
             }
         }
 
-
-
         // 更新梯度
         for (int i = 0; i < layer_list.size(); i++) {
             /* 更新公式如下：
@@ -776,7 +912,7 @@ public:
              * W = W + Vt
              */
             // 跳過dropout層
-            if (layer_list[i]->b.size() == 0) {
+            if (layer_list[i]->layer_name == "DropoutLayer") {
                 continue;
             }
             vector<vector<double>> V_w_t = multiply(last_dw[i], beta);
@@ -824,9 +960,26 @@ public:
 
         for (int i = 0; i < layer_length; i++) {
             layer_list[i]->set_weight_bias();
+            layer_list[i]->layer_id = i;
+//            cout << "batch:" <<layer_list[i]->batch_size << endl;
+//            cout << "channel:" <<layer_list[i]->channel << endl;
+//            cout << "img_height:" <<layer_list[i]->img_height << endl;
+//            cout << "img_width:" <<layer_list[i]->img_width << endl;
+//            cout << "filters:" <<layer_list[i]->filters << endl;
+//            cout << "k_size:" <<layer_list[i]->k_size << endl;
+//            cout << "output_height:" <<layer_list[i]->output_height << endl;
+//            cout << "output_width:" <<layer_list[i]->output_width << endl;
+//            cout << "layer_id:" <<layer_list[i]->layer_id << endl << endl;
 
             if (i + 1 < layer_length) {
-                layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
+                if (layer_list[i + 1]->layer_name == "ConvolutionLayer"){
+                    layer_list[i + 1]->batch_size = layer_list[i]->batch_size;
+                    layer_list[i + 1]->channel = layer_list[i]->filters;
+                    layer_list[i + 1]->img_height = layer_list[i]->output_height;
+                    layer_list[i + 1]->img_width = layer_list[i]->output_width;
+                }else{
+                    layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
+                }
             }
         }
     };
@@ -840,6 +993,7 @@ public:
                                                                 min((int) b + batch_size, (int) train_x.size()));
                 vector<vector<double>> batch_y = get_batch_data(train_y, b,
                                                                 min((int) b + batch_size, (int) train_x.size()));
+
                 vector<vector<double>> output = FP(batch_x);
                 BP(output, batch_y);
                 update_weight();
@@ -860,6 +1014,22 @@ public:
         }
     }
 
+    void fit(vector<vector<vector<vector<double>>>> train_x, vector<vector<double>> train_y) {
+        for (int e = 0; e < epoch; e++) {
+            for (int b = 0; b < train_x.size(); b += batch_size) {
+                // 每次訓練讀取batch size 的資料去訓練
+                vector<vector<vector<vector<double>>>> batch_x = get_batch_data(train_x, b, min((int) b + batch_size,
+                                                                                                (int) train_x.size()));
+                vector<vector<double>> batch_y = get_batch_data(train_y, b,
+                                                                min((int) b + batch_size, (int) train_x.size()));
+
+                vector<vector<vector<vector<double>>>> output = FP(batch_x);
+
+            }
+        }
+
+    }
+
     // 將資料分成 Batchsize
     inline vector<vector<double>> get_batch_data(vector<vector<double>> train_x, int start, int end) {
         vector<vector<double>> result = generate_mat(end - start, train_x[0].size());
@@ -869,6 +1039,16 @@ public:
         }
         return result;
     }
+
+    inline vector<vector<vector<vector<double>>>> get_batch_data(vector<vector<vector<vector<double>>>> train_x, int start, int end) {
+        vector<vector<vector<vector<double>>>> result = generate_mat(end - start, train_x[0].size(), train_x[0][0].size(), train_x[0][0][0].size(), 0);
+
+        for (int i = 0; i < (end - start); i++) {
+            result[i] = train_x[start + i];
+        }
+        return result;
+    }
+
 
     // 驗證
     void evaluate(vector<vector<double>> val_x, vector<vector<double>> val_y) {
@@ -891,8 +1071,24 @@ public:
 
         for (int i = 0; i < layer_list.size(); i++) {
             output = layer_list[i]->FP(output, training);
+
         }
         return output;
+    }
+
+    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> batch_x, bool training = true){
+        vector<vector<vector<vector<double>>>> output = batch_x;
+
+        for (int i = 0; i < layer_list.size(); i++) {
+            output = layer_list[i]->FP(output, training);
+
+            cout << "channel:" <<output[0].size() << endl;
+            cout << "img_height:" <<output[0][0].size() << endl;
+            cout << "img_height:" <<output[0][0][0].size() << endl << endl;
+
+        }
+        return output;
+
     }
 
     // 反向傳播
@@ -913,100 +1109,50 @@ public:
 int main() {
     srand(1);
     // 超參數
-    int EPOCH = 5000; // 學習次數
-    int BATCH_SIZE = 5;  // 批量大小
+    int EPOCH = 1; // 學習次數
+    int BATCH_SIZE = 1;  // 批量大小
     double LEARNING_RATE = 0.001;  // 學習率
     double DROPOUT_PROB = 0.5; // dropout概率
 
-    // 訓練資料
-    vector<vector<double>> train_x = {{0, 1, 1, 0, 0,
-                                              0, 0, 1, 0, 0,
-                                              0, 0, 1, 0, 0,
-                                              0, 0, 1, 0, 0,
-                                              0, 1, 1, 1, 0},
-                                      {1, 1, 1, 1, 0,
-                                              0, 0, 0, 0, 1,
-                                              0, 1, 1, 1, 0,
-                                              1, 0, 0, 0, 0,
-                                              1, 1, 1, 1, 1},
-                                      {1, 1, 1, 1, 0,
-                                              0, 0, 0, 0, 1,
-                                              0, 1, 1, 1, 0,
-                                              0, 0, 1, 0, 1,
-                                              1, 1, 1, 1, 0},
-                                      {0, 0, 0, 1, 0,
-                                          0, 0, 1, 1, 0,
-                                          0, 1, 0, 1, 0,
-                                          1, 1, 1, 1, 1,
-                                          0, 0, 0, 1, 0},
-                                      {1, 1, 1, 1, 1,
-                                              1, 0, 0, 0, 0,
-                                              1, 1, 1, 1, 0,
-                                              0, 0, 0, 0, 1,
-                                              1, 1, 1, 1, 0}};
 
-    vector<vector<double>> train_y = {{1, 0, 0, 0, 0},
-                                      {0, 1, 0, 0, 0},
-                                      {0, 0, 1, 0, 0},
-                                      {0, 0, 0, 1, 0},
-                                      {0, 0, 0, 0, 1}};
+    vector<vector<vector<vector<double>>>> train_x = {{{{1,  2,  3,  4},
+                                                               {5,  6,  7,  8},
+                                                               {9,  10, 11, 12},
+                                                               {13, 14, 15, 16}}},
 
+                                                      {{{17, 18, 19, 20},
+                                                               {21, 22, 23, 24},
+                                                               {25, 26, 27, 28},
+                                                               {29, 30, 31, 32}}},
 
-    // 驗證資料
-    vector<vector<double>> val_x = {
-            {
-                    0, 0, 1, 1, 0,
-                    0, 0, 1, 1, 0,
-                    0, 1, 0, 1, 0,
-                    0, 0, 0, 1, 0,
-                    0, 1, 1, 1, 0},
-            {
-                    1, 1, 1, 1, 0,
-                    0, 0, 0, 0, 1,
-                    0, 1, 1, 1, 0,
-                    1, 0, 0, 0, 1,
-                    1, 1, 1, 1, 1},
-            {
-                    1, 1, 1, 1, 0,
-                    0, 0, 0, 0, 1,
-                    0, 1, 1, 1, 0,
-                    1, 0, 0, 0, 1,
-                    1, 1, 1, 1, 0},
-            {
-                    0, 1, 1, 1, 0,
-                    0, 1, 0, 0, 0,
-                    0, 1, 1, 1, 0,
-                    0, 0, 0, 1, 1,
-                    0, 1, 1, 1, 0},
-            {
-                    0, 1, 1, 1, 1,
-                    0, 1, 0, 0, 0,
-                    0, 1, 1, 1, 0,
-                    0, 0, 0, 1, 0,
-                    1, 1, 1, 1, 0}
-    };
+                                                      {{{33, 34, 35, 36},
+                                                               {37, 38, 39, 40},
+                                                               {41, 42, 43, 44},
+                                                               {45, 46, 47, 48}}},
 
-    vector<vector<double>> val_y = {{1, 0, 0, 0, 0},
-                                    {0, 1, 0, 0, 0},
-                                    {0, 0, 1, 0, 0},
-                                    {0, 0, 0, 1, 0},
-                                    {0, 0, 0, 0, 1}};
+                                                      {{{{49, 50, 51, 52},
+                                                             {53, 54, 55, 56},
+                                                                 {57, 58, 59, 60},
+                                                                     {61, 62, 63, 64}}}}};
+
+    vector<vector<double>> train_y = {{0, 1, 0},
+                                      {1, 0, 0},
+                                      {1, 0, 0},
+                                      {0, 0, 1}};
 
 
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
-    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new SGD(LEARNING_RATE));
+    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.8));
 
-    module.add(new BaseLayer(25, 32, new relu));
-    module.add(new Dropout(DROPOUT_PROB));
-    module.add(new BaseLayer(128, new relu));
-    module.add(new BaseLayer(5, new softmax));
+    module.add(new ConvolutionLayer(BATCH_SIZE, 1, 4, 4, 2, 2, new relu));
+    module.add(new ConvolutionLayer(16, 2, new relu));
     module.compile();
 
     // 訓練
     module.fit(train_x, train_y);
 
     // 驗證
-    module.evaluate(val_x, val_y);
+//    module.evaluate(val_x, val_y);
 
     return 0;
 }
