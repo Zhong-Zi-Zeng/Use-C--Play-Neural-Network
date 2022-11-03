@@ -619,6 +619,7 @@ public:
     virtual vector<vector<double>> FP(vector<vector<double>> x, bool training) = 0;
     virtual vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) = 0;
     virtual vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) = 0;
+    virtual vector<vector<vector<vector<double>>>> BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) = 0;
 };
 
 // ==============隱藏層==============
@@ -715,11 +716,11 @@ public:
     vector<vector<double>> FP(vector<vector<double>> x, bool training) override{
 
     }
-    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) {
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override{
 
     };
 
-    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) {
+    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) override{
         img_2d = im2col(x);
         u = dot(w, img_2d);
 
@@ -729,10 +730,14 @@ public:
 
         y = (*activation).undiff(u);
 
-        return img_reshape(y);
+        return img_reshape4d(y);
     }
 
-//    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) {};
+    vector<vector<vector<vector<double>>>> BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) override{
+
+
+
+    };
 
     vector<vector<double>> im2col(vector<vector<vector<vector<double>>>> img) {
         /** @brief 將輸入圖片轉為二維矩陣形式.
@@ -757,7 +762,7 @@ public:
         return result;
     }
 
-    vector<vector<vector<vector<double>>>> img_reshape(vector<vector<double>> img_2d) {
+    vector<vector<vector<vector<double>>>> img_reshape4d(vector<vector<double>> img_2d) {
         /** @brief 將二維圖片轉換回原四維圖片 (batch_size, channel, output_height, output_width).
           * @param img 二維圖像
           * @return 轉換完畢後的四維圖片. */
@@ -1025,6 +1030,12 @@ public:
 
                 vector<vector<vector<vector<double>>>> output = FP(batch_x);
 
+                for (int b = 0; b < batch_size; b++){
+                    for (int c = 0; c < output[0].size(); c++){
+                        show_mat(output[b][c]);
+                    }
+                }
+
             }
         }
 
@@ -1082,9 +1093,9 @@ public:
         for (int i = 0; i < layer_list.size(); i++) {
             output = layer_list[i]->FP(output, training);
 
-            cout << "channel:" <<output[0].size() << endl;
-            cout << "img_height:" <<output[0][0].size() << endl;
-            cout << "img_height:" <<output[0][0][0].size() << endl << endl;
+//            cout << "channel:" <<output[0].size() << endl;
+//            cout << "img_height:" <<output[0][0].size() << endl;
+//            cout << "img_height:" <<output[0][0][0].size() << endl << endl;
 
         }
         return output;
@@ -1144,8 +1155,9 @@ int main() {
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
     Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.8));
 
-    module.add(new ConvolutionLayer(BATCH_SIZE, 1, 4, 4, 2, 2, new relu));
-    module.add(new ConvolutionLayer(16, 2, new relu));
+    // ConvolutionLayer(batch_size, channel, img_height, img_width, filters, k_size, ActivationFunc)
+    module.add(new ConvolutionLayer(BATCH_SIZE, 1, 4, 4, 2, 2, new relu, false));
+//    module.add(new ConvolutionLayer(16, 2, new relu));
     module.compile();
 
     // 訓練

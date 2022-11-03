@@ -19,7 +19,7 @@ public:
     int col = 0;
 
     Matrix() {
-        fill(0);
+        matrix = (double **) malloc(sizeof(double *) * row);
     }
 
     template<size_t row, size_t col>
@@ -58,10 +58,14 @@ public:
     }
 
     ~Matrix(){
+//        if (matrix != NULL){
+        cout << "clear" << endl;
+
         for (int r = 0; r < row; r++) {
             free(Matrix::matrix[r]);
         }
         free(Matrix::matrix);
+//        }
     }
 
     Matrix operator+(Matrix other) {
@@ -73,9 +77,21 @@ public:
         int max_col = max(Matrix::col, other.col);
 
         // 初始化結果
-        Matrix result(max_row, max_col);
+        Matrix result(max_row, max_col, 0);
 
-        if (Matrix::row == 1) {
+        if (Matrix::row == 1 && Matrix::col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[0][0] + other.matrix[r][c];
+                }
+            }
+        } else if (other.row == 1 && other.col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] + other.matrix[0][0];
+                }
+            }
+        } else if (Matrix::row == 1) {
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[0][c] + other.matrix[r][c];
@@ -93,10 +109,16 @@ public:
                     result.matrix[r][c] = Matrix::matrix[r][c] + other.matrix[0][c];
                 }
             }
-        } else {
+        } else if(other.col == 1){
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[r][c] + other.matrix[r][0];
+                }
+            }
+        } else {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] + other.matrix[r][c];
                 }
             }
         }
@@ -113,9 +135,21 @@ public:
         int max_col = max(Matrix::col, other.col);
 
         // 初始化結果
-        Matrix result(max_row, max_col);
+        Matrix result(max_row, max_col, 0);
 
-        if (Matrix::row == 1) {
+        if (Matrix::row == 1 && Matrix::col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[0][0] - other.matrix[r][c];
+                }
+            }
+        } else if (other.row == 1 && other.col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] - other.matrix[0][0];
+                }
+            }
+        } else if (Matrix::row == 1) {
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[0][c] - other.matrix[r][c];
@@ -133,10 +167,16 @@ public:
                     result.matrix[r][c] = Matrix::matrix[r][c] - other.matrix[0][c];
                 }
             }
-        } else {
+        } else if (other.col == 1) {
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[r][c] - other.matrix[r][0];
+                }
+            }
+        } else {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] - other.matrix[r][c];
                 }
             }
         }
@@ -153,9 +193,21 @@ public:
         int max_col = max(Matrix::col, other.col);
 
         // 初始化結果
-        Matrix result(max_row, max_col);
+        Matrix result(max_row, max_col, 0);
 
-        if (Matrix::row == 1) {
+        if (Matrix::row == 1 && Matrix::col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[0][0] * other.matrix[r][c];
+                }
+            }
+        } else if (other.row == 1 && other.col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] * other.matrix[0][0];
+                }
+            }
+        } else if (Matrix::row == 1) {
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[0][c] * other.matrix[r][c];
@@ -173,10 +225,16 @@ public:
                     result.matrix[r][c] = Matrix::matrix[r][c] * other.matrix[0][c];
                 }
             }
-        } else {
+        } else if (other.col == 1) {
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[r][c] * other.matrix[r][0];
+                }
+            }
+        } else {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] * other.matrix[r][c];
                 }
             }
         }
@@ -193,9 +251,21 @@ public:
         int max_col = max(Matrix::col, other.col);
 
         // 初始化結果
-        Matrix result(max_row, max_col);
+        Matrix result(max_row, max_col, 0);
 
-        if (Matrix::row == 1) {
+        if (Matrix::row == 1 && Matrix::col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[0][0] / other.matrix[r][c];
+                }
+            }
+        } else if (other.row == 1 && other.col == 1) {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] / other.matrix[0][0];
+                }
+            }
+        } else if (Matrix::row == 1) {
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[0][c] / other.matrix[r][c];
@@ -213,10 +283,16 @@ public:
                     result.matrix[r][c] = Matrix::matrix[r][c] / other.matrix[0][c];
                 }
             }
-        } else {
+        } else if(other.col == 1){
             for (int r = 0; r < max_row; r++) {
                 for (int c = 0; c < max_col; c++) {
                     result.matrix[r][c] = Matrix::matrix[r][c] / other.matrix[r][0];
+                }
+            }
+        } else {
+            for (int r = 0; r < max_row; r++) {
+                for (int c = 0; c < max_col; c++) {
+                    result.matrix[r][c] = Matrix::matrix[r][c] / other.matrix[r][c];
                 }
             }
         }
@@ -521,7 +597,6 @@ public:
         cout << endl;
     }
 
-
 };
 
 Matrix operator+(double i, Matrix m) {
@@ -597,7 +672,8 @@ public:
 
     }
 
-    Matrix diff(Matrix m, Matrix label) override {
+    Matrix diff(Matrix m, Matrix label) override{
+
         Matrix y = undiff(m);
         Matrix result(m.row, m.col, 0);
 
@@ -606,6 +682,7 @@ public:
                 result.matrix[r][c] = y.matrix[r][c] * (1. - y.matrix[r][c]);
             }
         }
+
         return result;
     }
 
@@ -841,13 +918,9 @@ public:
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
 
     virtual Matrix FP(Matrix x, bool training) = 0;
-    virtual Matrix BP(Matrix x, Matrix label ,bool training) = 0;
 
-//    template<typename T>
-//    T FP(T x, bool training) {}; // 前向傳播
-//
-//    template<typename T>
-//    T BP(T x, Matrix label, bool training) {}; // 反向傳播
+    virtual Matrix BP(Matrix x, Matrix label, bool training) = 0;
+
 };
 
 // ==============隱藏層==============
@@ -874,28 +947,26 @@ public:
     }
 
 
-    void set_weight_bias() {
-        w = Matrix(BaseLayer::input_shape, BaseLayer::output_shape);
-        b = Matrix(1, BaseLayer::output_shape);
+    void set_weight_bias() override {
+        w = Matrix(input_shape, output_shape);
+        b = Matrix(1, output_shape);
     }
 
-    Matrix FP(Matrix x, bool training) override{
+    Matrix FP(Matrix x, bool training) override {
         this->x = x;
-//        x.show_matrix();
-
         u = x.dot(w);
 
         if (use_bias) {
             u = u + b;
         }
+
         y = (*activation).undiff(u);
 
         return y;
     }
 
-    Matrix BP(Matrix delta, Matrix label, bool training) override{
+    Matrix BP(Matrix delta, Matrix label, bool training) override {
         delta = delta * (*activation).diff(u, label);
-
         d_w = x.transpose().dot(delta);
         d_b = delta.sum(0);
         Matrix d_x = delta.dot(w.transpose());
@@ -914,11 +985,11 @@ public:
         layer_name = "DropoutLayer";
     }
 
-    void set_weight_bias() override{
+    void set_weight_bias() override {
         this->output_shape = input_shape;
     }
 
-    Matrix FP(Matrix x, bool training) override{
+    Matrix FP(Matrix x, bool training) override {
         this->x = x;
 
         // 如果不是在訓練過程，則直接返回輸入值
@@ -947,7 +1018,7 @@ public:
         }
     }
 
-    Matrix BP(Matrix delta, Matrix label, bool training) override{
+    Matrix BP(Matrix delta, Matrix label, bool training) override {
         if (training == false) {
             return delta;
         } else {
@@ -964,7 +1035,7 @@ public:
     double learning_rate;
     int layer_length;
 
-    void gradient_decent(Layer *layer_list) {};
+    void gradient_decent(Layer **layer_list) {};
 
 };
 
@@ -975,17 +1046,17 @@ public:
         this->learning_rate = learning_rate;
     }
 
-    void gradient_decent(Layer *layer_list) {
+    void gradient_decent(Layer **layer_list) {
         /* 更新公式如下：
          * Wt = Wt - learning_rate * d_w
          */
         for (int i = 0; i < layer_length; i++) {
             // 跳過dropout層
-            if (layer_list[i].layer_name == "DropoutLayer") {
+            if (layer_list[i]->layer_name == "DropoutLayer") {
                 continue;
             }
-            layer_list[i].w = layer_list[i].w - learning_rate * layer_list[i].d_w;
-            layer_list[i].b = layer_list[i].b - learning_rate * layer_list[i].d_b;
+            layer_list[i]->w = layer_list[i]->w - learning_rate * layer_list[i]->d_w;
+            layer_list[i]->b = layer_list[i]->b - learning_rate * layer_list[i]->d_b;
         }
     }
 };
@@ -1007,18 +1078,18 @@ public:
         last_db = (Matrix *) malloc(sizeof(Matrix) * layer_length);
     }
 
-    void gradient_decent(Layer *layer_list) {
+    void gradient_decent(Layer **layer_list) {
         // 第一次進來前先初始化last_dw和last_db
         if (last_dw[0].row == 0 && last_db[0].col == 0) {
             for (int i = 0; i < layer_length; i++) {
                 // 跳過dropout層
-                if (layer_list[i].layer_name == "DropoutLayer") {
+                if (layer_list[i]->layer_name == "DropoutLayer") {
                     continue;
                 }
-                int weight_row_size = layer_list[i].w.row;
-                int weight_col_size = layer_list[i].w.col;
-                int bias_row_size = layer_list[i].b.row;
-                int bias_col_size = layer_list[i].b.col;
+                int weight_row_size = layer_list[i]->w.row;
+                int weight_col_size = layer_list[i]->w.col;
+                int bias_row_size = layer_list[i]->b.row;
+                int bias_col_size = layer_list[i]->b.col;
 
                 last_dw[i] = Matrix(weight_row_size, weight_col_size, 0);
                 last_dw[i] = Matrix(bias_row_size, bias_col_size, 0);
@@ -1032,17 +1103,17 @@ public:
              * W = W + Vt
              */
             // 跳過dropout層
-            if (layer_list[i].layer_name == "DropoutLayer") {
+            if (layer_list[i]->layer_name == "DropoutLayer") {
                 continue;
             }
 
-            Matrix V_w_t = last_dw[i] * beta - learning_rate * layer_list[i].d_w;
+            Matrix V_w_t = last_dw[i] * beta - learning_rate * layer_list[i]->d_w;
             last_dw[i] = V_w_t;
-            layer_list[i].w = layer_list[i].w + V_w_t;
+            layer_list[i]->w = layer_list[i]->w + V_w_t;
 
-            Matrix V_b_t = last_db[i] * beta - learning_rate * layer_list[i].d_b;
+            Matrix V_b_t = last_db[i] * beta - learning_rate * layer_list[i]->d_b;
             last_db[i] = V_b_t;
-            layer_list[i].b = layer_list[i].b + V_b_t;
+            layer_list[i]->b = layer_list[i]->b + V_b_t;
         }
     }
 
@@ -1059,7 +1130,7 @@ public:
     int layer_length = 0; // 網路層數量
     LossFunc *loss; // 損失函式
     Optimizer *opt;  // 優化器
-    Layer *layer_list;  // 存放網路層
+    Layer **layer_list;  // 存放網路層
 
     Sequential(int epoch, int batch_size, LossFunc *loss, Optimizer *opt) {
         this->epoch = epoch;
@@ -1070,26 +1141,22 @@ public:
 
     // 增加層數
     template<size_t layer_length>
-    void add(Layer* (&_layer_list)[layer_length]) {
+    void add(Layer *(&_layer_list)[layer_length]) {
         this->layer_length = layer_length;
         opt->layer_length = layer_length;
+        layer_list = (Layer **) malloc(sizeof(Layer *) * layer_length);
 
-        layer_list = (Layer *) malloc(sizeof(Layer) * layer_length);
-
-        for(int i=0; i < layer_length; i++){
-            layer_list[i] = *_layer_list[i];
+        for (int i = 0; i < layer_length; i++) {
+            layer_list[i] = _layer_list[i];
         }
-
-//        layer_list[0].w = Matrix(layer_list[0].input_shape, layer_list[0].output_shape);
-        layer_list[0].set_weight_bias();
     }
 
     // 設置所有層數的權重
     void compile() {
         for (int i = 0; i < layer_length; i++) {
-            layer_list[i].set_weight_bias();
+            layer_list[i]->set_weight_bias();
             if (i + 1 < layer_length) {
-                layer_list[i + 1].input_shape = layer_list[i].output_shape;
+                layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
             }
         }
     };
@@ -1105,10 +1172,10 @@ public:
                 Matrix batch_y = get_batch_data(train_y, b,
                                                 min((int) b + batch_size, (int) train_x_row));
 
-                Matrix output = FP(batch_x);
+//                Matrix output = FP(batch_x);
 //                BP(output, batch_y);
 //                update_weight();
-//
+
 //                // 顯示訓練資料
 //                if (e == epoch - 1) {
 //                    cout << "========================" << endl;
@@ -1124,7 +1191,6 @@ public:
             }
         }
     }
-
 
     // 將資料分成 Batchsize
     template<size_t row, size_t col>
@@ -1157,7 +1223,7 @@ public:
         Matrix output = batch_x;
 
         for (int i = 0; i < layer_length; i++) {
-            output = layer_list[i].FP(output, training);
+            output = layer_list[i]->FP(output, training);
         }
         return output;
     }
@@ -1167,7 +1233,7 @@ public:
         Matrix delta = loss->diff(output, batch_y);
 
         for (int i = layer_length - 1; i > -1; i--) {
-            delta = layer_list[i].BP(delta, batch_y, training);
+            delta = layer_list[i]->BP(delta, batch_y, training);
         }
     }
 
@@ -1181,7 +1247,7 @@ int main() {
     srand(1);
     // 超參數
     int EPOCH = 1; // 學習次數
-    int BATCH_SIZE = 1;  // 批量大小
+    int BATCH_SIZE = 4;  // 批量大小
     double LEARNING_RATE = 0.01;  // 學習率
 
     // 訓練資料
@@ -1198,12 +1264,13 @@ int main() {
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
     Sequential module(EPOCH, BATCH_SIZE, new MSE, new SGD(LEARNING_RATE));
 
-    Layer* dense[] = {
-           new BaseLayer(3, 1, new sigmoid),
+    Layer *dense[] = {
+            new BaseLayer(3, 1, new sigmoid, false),
+//            new BaseLayer(1, new sigmoid),
     };
 
     module.add(dense);
-//    module.compile();
+    module.compile();
 
     // 訓練
 //    module.fit(train_x, train_y);
