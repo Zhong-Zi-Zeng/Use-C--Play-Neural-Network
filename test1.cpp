@@ -58,6 +58,24 @@ void img_reshape2d(vector<vector<vector<vector<double>>>> img) {
 
 }
 
+vector<vector<double>> sum_axis1(vector<vector<double>> a) {
+    int row = a.size();
+    int col = a[0].size();
+
+    // 向行求和
+    vector<vector<double>> result = generate_mat(row, 1, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        double total = 0;
+        for (int j = 0; j < col; j++) {
+            total += a[i][j];
+        }
+        result[i][0] = total;
+    }
+    return result;
+
+}
+
 
 int main() {
     vector<vector<vector<vector<double>>>> img = {{{{0, 1, 2},
@@ -75,7 +93,12 @@ int main() {
                                                     {30, 31, 32},
                                                     {33, 34, 35}}}};
 
-    img_reshape2d(img);
+//    img_reshape2d(img);
+    vector<vector<double>> w = generate_mat(5, 6, 1, false);
+    vector<vector<double>> s = sum_axis1(w);
+    show_mat(s);
+
+
 
     return 0;
 }

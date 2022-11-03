@@ -121,7 +121,7 @@ vector<vector<double>> add(vector<vector<double>> a, vector<vector<double>> b) {
             }
         }
         return result;
-    } else{
+    } else {
         for (int i = 0; i < a_row; i++) {
             for (int j = 0; j < a_col; j++) {
                 result[i][j] = a[i][j] + b[i][0];
@@ -244,6 +244,25 @@ vector<vector<double>> sum(vector<vector<double>> a, int axis = 0) {
         return result;
     }
 }
+
+vector<vector<double>> sum_axis1(vector<vector<double>> a) {
+    int row = a.size();
+    int col = a[0].size();
+
+    // 向行求和
+    vector<vector<double>> result = generate_mat(row, 1, 0, false);
+
+    for (int i = 0; i < row; i++) {
+        double total = 0;
+        for (int j = 0; j < col; j++) {
+            total += a[i][j];
+        }
+        result[i][0] = total;
+    }
+    return result;
+
+}
+
 
 // 求ln
 vector<vector<double>> ln(vector<vector<double>> m) {
@@ -617,9 +636,13 @@ public:
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
     virtual vector<vector<double>> FP(vector<vector<double>> x, bool training) = 0;
+
     virtual vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) = 0;
+
     virtual vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) = 0;
-    virtual vector<vector<vector<vector<double>>>> BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) = 0;
+
+    virtual vector<vector<vector<vector<double>>>>
+    BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) = 0;
 };
 
 // ==============隱藏層==============
@@ -651,7 +674,7 @@ public:
         b = generate_mat(1, output_shape);
     }
 
-    vector<vector<double>> FP(vector<vector<double>> x, bool training) override{
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
         this->x = x;
 
         u = dot(x, w);
@@ -663,7 +686,8 @@ public:
 
         return y;
     }
-    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override{
+
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
         delta = multiply(delta, (*activation).diff(u, label));
         d_w = dot(transpose(x), delta);
         d_b = sum(delta, 0);
@@ -713,16 +737,17 @@ public:
         b = generate_mat(filters, 1);
     }
 
-    vector<vector<double>> FP(vector<vector<double>> x, bool training) override{
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
 
     }
-    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override{
+
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
 
     };
 
-    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) override{
-        img_2d = im2col(x);
-        u = dot(w, img_2d);
+    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) override {
+        img_2d = im2col(x); // (Channel * f_h * f_w, batch_size * output_height * output_width)
+        u = dot(w, img_2d); // (filters, batch_size * output_height * output_width)
 
         if (use_bias) {
             u = add(u, b);
@@ -733,9 +758,14 @@ public:
         return img_reshape4d(y);
     }
 
-    vector<vector<vector<vector<double>>>> BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) override{
-
-
+    vector<vector<vector<vector<double>>>>
+    BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) override {
+        vector<vector<double>> delta_2d = img_reshape2d(delta); // (filters, batch_size * output_height * output_width)
+        delta_2d = multiply(delta_2d, (*activation).diff(u, label));
+        d_w = dot(delta_2d, transpose(img_2d)); // (filters,  batch_size * output_height * output_width)
+        d_b = sum_axis1(delta_2d);
+        vector<vector<double>> d_x = dot(transpose(w), delta_2d); // (channel * k_size * k_size, batch_size * output_height * output_width)
+        vector<vector<double>> d_x_4d
 
     };
 
@@ -756,6 +786,28 @@ public:
                 int img_c = r % k_size + c % output_height;  // 對應到原圖的col座標
 
                 result[r][c] = img[img_batch][img_channel][img_r][img_c];
+            }
+        }
+
+        return result;
+    }
+
+    vector<vector<vector<vector<double>>>> col2im(vector<vector<double>> img) {
+        /** @brief 將輸入二維矩陣轉為4維圖片.
+          * @param img 二維圖像 (channel * k_size * k_size, batch_size * output_height * output_width)
+          * @return 轉換完畢後的二維矩陣. (batch_size, channel, img_height, img_width)
+          * */
+
+        vector<vector<vector<vector<double>>>> result = generate_mat(batch_size, channel, img_height, img_width, 0);
+
+        for (int c = 0; c < img[0].size(); c++) {
+            for (int r = 0; r < img.size(); r++) {
+                int img_batch = c / (output_height * output_width); // 目前到哪張圖
+                int img_channel = r / (k_size * k_size); // 目前到哪個通道
+                int img_r = (r / k_size) % k_size + (c / output_width) % output_width; // 對應到原圖的row座標
+                int img_c = r % k_size + c % output_height;  // 對應到原圖的col座標
+
+                result[img_batch][img_channel][img_r][img_c] = img[r][c];
             }
         }
 
@@ -784,6 +836,26 @@ public:
 
         return result;
     }
+
+    vector<vector<double>> img_reshape2d(vector<vector<vector<vector<double>>>> img) {
+        /** @brief 將四維梯度圖轉換回二維矩陣
+        * @param img 四維圖像 (batch_size, filters, output_height, output_width).
+        * @return 轉換完畢後的二維圖片. (filters, batch_size * output_height * output_width)
+         * */
+
+        vector<vector<double>> result = generate_mat(filters, batch_size * output_height * output_width);
+
+        for (int r = 0; r < result.size(); r++) {
+            for (int c = 0; c < result[0].size(); c++) {
+                int img_batch = c / (output_width * output_height); // 對應到四維圖像的哪張圖
+                int img_r = (c / output_height) % output_height; // 對應到四維圖像的row座標
+                int img_c = c % output_width; // 對應到四維圖像的col座標
+                result[r][c] = img[img_batch][r][img_r][img_c];
+            }
+        }
+
+        return result;
+    }
 };
 
 
@@ -801,7 +873,7 @@ public:
         this->output_shape = input_shape;
     }
 
-    vector<vector<double>> FP(vector<vector<double>> x, bool training)  override{
+    vector<vector<double>> FP(vector<vector<double>> x, bool training) override {
         this->x = x;
 
         // 如果不是在訓練過程，則直接返回輸入值
@@ -832,7 +904,7 @@ public:
         }
     }
 
-    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override{
+    vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) override {
         if (training == false) {
             return delta;
         } else {
@@ -977,12 +1049,12 @@ public:
 //            cout << "layer_id:" <<layer_list[i]->layer_id << endl << endl;
 
             if (i + 1 < layer_length) {
-                if (layer_list[i + 1]->layer_name == "ConvolutionLayer"){
+                if (layer_list[i + 1]->layer_name == "ConvolutionLayer") {
                     layer_list[i + 1]->batch_size = layer_list[i]->batch_size;
                     layer_list[i + 1]->channel = layer_list[i]->filters;
                     layer_list[i + 1]->img_height = layer_list[i]->output_height;
                     layer_list[i + 1]->img_width = layer_list[i]->output_width;
-                }else{
+                } else {
                     layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
                 }
             }
@@ -1030,8 +1102,8 @@ public:
 
                 vector<vector<vector<vector<double>>>> output = FP(batch_x);
 
-                for (int b = 0; b < batch_size; b++){
-                    for (int c = 0; c < output[0].size(); c++){
+                for (int b = 0; b < batch_size; b++) {
+                    for (int c = 0; c < output[0].size(); c++) {
                         show_mat(output[b][c]);
                     }
                 }
@@ -1051,8 +1123,10 @@ public:
         return result;
     }
 
-    inline vector<vector<vector<vector<double>>>> get_batch_data(vector<vector<vector<vector<double>>>> train_x, int start, int end) {
-        vector<vector<vector<vector<double>>>> result = generate_mat(end - start, train_x[0].size(), train_x[0][0].size(), train_x[0][0][0].size(), 0);
+    inline vector<vector<vector<vector<double>>>>
+    get_batch_data(vector<vector<vector<vector<double>>>> train_x, int start, int end) {
+        vector<vector<vector<vector<double>>>> result = generate_mat(end - start, train_x[0].size(),
+                                                                     train_x[0][0].size(), train_x[0][0][0].size(), 0);
 
         for (int i = 0; i < (end - start); i++) {
             result[i] = train_x[start + i];
@@ -1087,7 +1161,7 @@ public:
         return output;
     }
 
-    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> batch_x, bool training = true){
+    vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> batch_x, bool training = true) {
         vector<vector<vector<vector<double>>>> output = batch_x;
 
         for (int i = 0; i < layer_list.size(); i++) {

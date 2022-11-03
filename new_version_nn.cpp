@@ -946,7 +946,6 @@ public:
         init(input_shape, output_shape, activation, use_bias);
     }
 
-
     void set_weight_bias() override {
         w = Matrix(input_shape, output_shape);
         b = Matrix(1, output_shape);

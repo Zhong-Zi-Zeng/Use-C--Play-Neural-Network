@@ -82,7 +82,7 @@
 				</MakeCommands>
 			</Target>
 		</Build>
-		<Unit filename="C:/Users/User/Desktop/Use-C--Play-Neural-Network/new_version_nn.cpp">
+		<Unit filename="C:/Users/User/Desktop/Use-C--Play-Neural-Network/test1.cpp">
 			<Option target="for_c__"/>
 		</Unit>
 		<Unit filename="C:/Users/User/Desktop/Use-C--Play-Neural-Network/CMakeLists.txt">
