@@ -389,13 +389,12 @@ public:
          */
 
         // 初始化結果
-        Matrix result(row, col);
+        Matrix result(col, row);
 
         for (int i = 0; i < row; i++) {
             for (int j = 0; j < col; j++)
                 result.matrix[j][i] = matrix[i][j];
         }
-
         return result;
     }
 
@@ -690,27 +689,14 @@ public:
 class sigmoid : public ActivationFunc {
 public:
     Matrix undiff(Matrix m) override {
-        Matrix result(m.row, m.col, 0);
+        Matrix result = 1. / (1 + Matrix::exp(-1 * m));
 
-        for (int r = 0; r < m.row; r++) {
-            for (int c = 0; c < m.col; c++) {
-                result.matrix[r][c] = 1. / (1. + std::exp(-m.matrix[r][c]));
-            }
-        }
         return result;
-
     }
 
     Matrix diff(Matrix m, Matrix label) override{
-
         Matrix y = undiff(m);
-        Matrix result(m.row, m.col, 0);
-
-        for (int r = 0; r < m.row; r++) {
-            for (int c = 0; c < m.row; c++) {
-                result.matrix[r][c] = y.matrix[r][c] * (1. - y.matrix[r][c]);
-            }
-        }
+        Matrix result = y * (1. - y);
 
         return result;
     }
@@ -721,7 +707,7 @@ public:
 class relu : public ActivationFunc {
 public:
     Matrix undiff(Matrix m) override {
-        Matrix result(m.row, m.col, 0);
+        Matrix result(m.row, m.col);
 
         for (int r = 0; r < m.row; r++) {
             for (int c = 0; c < m.col; c++) {
@@ -844,10 +830,10 @@ class MSE : public LossFunc {
 public:
     double undiff(Matrix pre, Matrix label) override {
         Matrix o1 = pre - label;
-        double o2 = o1.sum();
-        o2 = (o2 * o2) / 2;
+        Matrix o2 = o1 * o1;
+        double o3 = o2.sum() / 2;
 
-        return o2;
+        return o3;
     }
 
     Matrix diff(Matrix pre, Matrix label) override {
@@ -884,7 +870,6 @@ public:
     }
 };
 
-
 // ==============Categorical cross entropy==============
 class Categorical_crosse_entropy : public LossFunc {
     double undiff(Matrix pre, Matrix label) override {
@@ -901,7 +886,7 @@ class Categorical_crosse_entropy : public LossFunc {
     Matrix diff(Matrix pre, Matrix label) override {
         int row_size = label.row;
         int col_size = label.col;
-        Matrix result(row_size, col_size, 0);
+        Matrix result(row_size, col_size);
 
         for (int r = 0; r < row_size; r++) {
             // 用來存訪label對應的類別
@@ -1040,10 +1025,8 @@ public:
                     w.matrix[r][c] = (rand_num < prob) ? 0 : 1;
                 }
             }
-
             // 將輸入與w相乘
             y = x * w;
-
             return y;
         }
     }
@@ -1063,10 +1046,8 @@ public:
 class Optimizer {
 public:
     double learning_rate;
-    int layer_length;
 
-    void gradient_decent(Layer **layer_list) {};
-
+    virtual void gradient_decent(vector<Layer *> layer_list) = 0;
 };
 
 // ==============SGD==============
@@ -1076,13 +1057,13 @@ public:
         this->learning_rate = learning_rate;
     }
 
-    void gradient_decent(Layer **layer_list) {
+    void gradient_decent(vector<Layer *> layer_list) override{
         /* 更新公式如下：
          * Wt = Wt - learning_rate * d_w
          */
-        for (int i = 0; i < layer_length; i++) {
+        for (int i = 0; i < layer_list.size(); i++) {
             // 跳過dropout層
-            if (layer_list[i]->layer_name == "DropoutLayer") {
+            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
                 continue;
             }
             layer_list[i]->w = layer_list[i]->w - learning_rate * layer_list[i]->d_w;
@@ -1095,45 +1076,45 @@ public:
 class Momentum : public Optimizer {
 public:
     double beta = 0.9;  // Beta 為常數，通常設定為0.9
-
-    Matrix *last_dw;  // 用來存放上一次weight 的梯度
-    Matrix *last_db;  // 用來存放上一次bias 的梯度
+    bool initial_flag = true;
+    vector<Matrix> last_dw;  // 用來存放上一次weight 的梯度
+    vector<Matrix> last_db;  // 用來存放上一次bias 的梯度
 
     Momentum(double learning_rate, double beta) {
-        this->layer_length = layer_length;
         this->learning_rate = learning_rate;
         this->beta = beta;
-
-        last_dw = (Matrix *) malloc(sizeof(Matrix) * layer_length);
-        last_db = (Matrix *) malloc(sizeof(Matrix) * layer_length);
     }
 
-    void gradient_decent(Layer **layer_list) {
+    void gradient_decent(vector<Layer *> layer_list) override{
         // 第一次進來前先初始化last_dw和last_db
-        if (last_dw[0].row == 0 && last_db[0].col == 0) {
-            for (int i = 0; i < layer_length; i++) {
-                // 跳過dropout層
-                if (layer_list[i]->layer_name == "DropoutLayer") {
+        if (initial_flag) {
+            initial_flag = false;
+            for (int i = 0; i < layer_list.size(); i++) {
+                // 若是遇到dropout、Flatten層，則加一個空陣列，方便後面計算
+                if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
+                    last_dw.emplace_back(0, 0);
+                    last_db.emplace_back(0, 0);
                     continue;
                 }
+
                 int weight_row_size = layer_list[i]->w.row;
                 int weight_col_size = layer_list[i]->w.col;
                 int bias_row_size = layer_list[i]->b.row;
                 int bias_col_size = layer_list[i]->b.col;
 
-                last_dw[i] = Matrix(weight_row_size, weight_col_size, 0);
-                last_dw[i] = Matrix(bias_row_size, bias_col_size, 0);
+                last_dw[i] = Matrix(weight_row_size, weight_col_size);
+                last_db[i] = Matrix(bias_row_size, bias_col_size);
             }
         }
 
         // 更新梯度
-        for (int i = 0; i < layer_length; i++) {
+        for (int i = 0; i < layer_list.size(); i++) {
             /* 更新公式如下：
              * Vt = Beta * Vt-1 - learning_rate * d_w
              * W = W + Vt
              */
             // 跳過dropout層
-            if (layer_list[i]->layer_name == "DropoutLayer") {
+            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
                 continue;
             }
 
@@ -1149,7 +1130,6 @@ public:
 
 };
 
-
 // ==============================================================================
 // -- 序列模型 -------------------------------------------------------------------
 // ==============================================================================
@@ -1157,7 +1137,7 @@ class Sequential {
 public:
     int epoch;  // 訓練次數
     int batch_size;  // 批量大小
-    int layer_length = 0; // 網路層數量
+    int layer_length; // 網路層數量
     LossFunc *loss; // 損失函式
     Optimizer *opt;  // 優化器
     vector<Layer *> layer_list;  // 存放網路層
@@ -1176,6 +1156,7 @@ public:
 
     // 設置所有層數的權重
     void compile() {
+        layer_length = layer_list.size();
         for (int i = 0; i < layer_length; i++) {
             layer_list[i]->set_weight_bias();
             if (i + 1 < layer_length) {
@@ -1192,36 +1173,34 @@ public:
                 Matrix batch_x = get_batch_data(train_x, b,
                                                 min((int) b + batch_size, (int) train_x.row));
                 Matrix batch_y = get_batch_data(train_y, b,
-                                                min((int) b + batch_size, (int) train_x.row));
+                                                min((int) b + batch_size, (int) train_y.row));
 
-                batch_x.show_matrix();
                 Matrix output = FP(batch_x);
-//                output.show_matrix();
                 BP(output, batch_y);
-//                update_weight();
+                update_weight();
 
-//                // 顯示訓練資料
-//                if (e == epoch - 1) {
-//                    cout << "========================" << endl;
-//                    cout << "Pre:" << endl;
-//                    output.show_matrix();
-//                    cout << "Label:" << endl;
-//                    batch_y.show_matrix();
-//                    cout << "Loss:" << endl;
-//                    cout << (*loss).undiff(output, batch_y) << endl;
-//                    cout << "========================" << endl;
-//                }
+                // 顯示訓練資料
+                if (e == epoch - 1) {
+                    cout << "========================" << endl;
+                    cout << "Pre:" << endl;
+                    output.show_matrix();
+                    cout << "Label:" << endl;
+                    batch_y.show_matrix();
+                    cout << "Loss:" << endl;
+                    cout << (*loss).undiff(output, batch_y) << endl;
+                    cout << "========================" << endl;
+                }
 
             }
         }
     }
 
     // 將資料分成 Batchsize
-    inline Matrix get_batch_data(Matrix &train_x, int start, int end) {
-        Matrix result(end - start, train_x.col, 0);
+    static inline Matrix get_batch_data(Matrix &train_data, int start, int end) {
+        Matrix result(end - start, train_data.col);
 
         for (int i = 0; i < (end - start); i++) {
-            result.matrix[i] = train_x.matrix[start + i];
+            result.matrix[i] = train_data.matrix[start + i];
         }
         return result;
     }
@@ -1248,13 +1227,13 @@ public:
         for (int i = 0; i < layer_length; i++) {
             output = layer_list[i]->FP(output, training);
         }
+
         return output;
     }
 
     // 反向傳播
     inline void BP(Matrix &output, Matrix &batch_y, bool training = true) {
         Matrix delta = loss->diff(output, batch_y);
-
         for (int i = layer_length - 1; i > -1; i--) {
             delta = layer_list[i]->BP(delta, batch_y, training);
         }
@@ -1267,11 +1246,11 @@ public:
 };
 
 int main() {
-    srand(1);
+    srand(time(NULL));
     // 超參數
-    int EPOCH = 1; // 學習次數
-    int BATCH_SIZE = 2;  // 批量大小
-    double LEARNING_RATE = 0.01;  // 學習率
+    int EPOCH = 1000; // 學習次數
+    int BATCH_SIZE = 4;  // 批量大小
+    double LEARNING_RATE = 0.2;  // 學習率
 
     // 訓練資料
     double train_x[4][3] = {{0, 0, 1},
@@ -1279,24 +1258,27 @@ int main() {
                             {1, 0, 1},
                             {1, 1, 1}};
 
-    double train_y[4][1] = {{1},
-                            {0},
-                            {0},
-                            {1}};
+    double train_y[4][2] = {{1, 0},
+                            {0, 1},
+                            {0, 1},
+                            {1, 0}};
+//
+//    double train_y[4][1] = {{1},
+//                            {0},
+//                            {0},
+//                            {1}};
+
 
     // 將訓練資料轉為Matrix類別
     Matrix train_x_matrix = Matrix(train_x);
     Matrix train_y_matrix = Matrix(train_y);
 
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
-    Sequential module(EPOCH, BATCH_SIZE, new MSE, new SGD(LEARNING_RATE));
+    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.4));
 
-    Layer *dense[] = {
-            new BaseLayer(3, 1, new sigmoid),
-//            new BaseLayer(1, new sigmoid),
-    };
-
-    module.add(dense);
+    module.add(new BaseLayer(3, 16, new sigmoid));
+//    module.add(new Dropout(0.2));
+    module.add(new BaseLayer(2, new softmax));
     module.compile();
 
     // 訓練

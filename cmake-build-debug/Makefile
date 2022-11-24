@@ -128,29 +128,29 @@ for_c__/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/build
 .PHONY : for_c__/fast
 
-test1.obj: test1.cpp.obj
-.PHONY : test1.obj
+new_version_nn.obj: new_version_nn.cpp.obj
+.PHONY : new_version_nn.obj
 
 # target to build an object file
-test1.cpp.obj:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/test1.cpp.obj
-.PHONY : test1.cpp.obj
+new_version_nn.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/new_version_nn.cpp.obj
+.PHONY : new_version_nn.cpp.obj
 
-test1.i: test1.cpp.i
-.PHONY : test1.i
+new_version_nn.i: new_version_nn.cpp.i
+.PHONY : new_version_nn.i
 
 # target to preprocess a source file
-test1.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/test1.cpp.i
-.PHONY : test1.cpp.i
+new_version_nn.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/new_version_nn.cpp.i
+.PHONY : new_version_nn.cpp.i
 
-test1.s: test1.cpp.s
-.PHONY : test1.s
+new_version_nn.s: new_version_nn.cpp.s
+.PHONY : new_version_nn.s
 
 # target to generate assembly for a file
-test1.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/test1.cpp.s
-.PHONY : test1.cpp.s
+new_version_nn.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\for_c__.dir\build.make CMakeFiles/for_c__.dir/new_version_nn.cpp.s
+.PHONY : new_version_nn.cpp.s
 
 # Help Target
 help:
@@ -161,9 +161,9 @@ help:
 	@echo ... edit_cache
 	@echo ... rebuild_cache
 	@echo ... for_c__
-	@echo ... test1.obj
-	@echo ... test1.i
-	@echo ... test1.s
+	@echo ... new_version_nn.obj
+	@echo ... new_version_nn.i
+	@echo ... new_version_nn.s
 .PHONY : help
 
 
