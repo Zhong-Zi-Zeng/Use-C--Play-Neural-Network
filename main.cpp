@@ -636,11 +636,9 @@ public:
 
     virtual void set_weight_bias() = 0;  // 初始化權重與偏置值
     virtual vector<vector<double>> FP(vector<vector<double>> x, bool training) = 0;
-
     virtual vector<vector<vector<vector<double>>>> FP(vector<vector<vector<vector<double>>>> x, bool training) = 0;
-
+//    virtual vector<vector<double>> FP(vector<vector<vector<vector<double>>>> x, bool training) = 0;
     virtual vector<vector<double>> BP(vector<vector<double>> delta, vector<vector<double>> label, bool training) = 0;
-
     virtual vector<vector<vector<vector<double>>>>
     BP(vector<vector<vector<vector<double>>>> delta, vector<vector<double>> label, bool training) = 0;
 };
@@ -697,7 +695,7 @@ public:
     }
 };
 
-
+// ==============卷積層==============
 class ConvolutionLayer : public Layer {
 public:
     vector<vector<double>> img_2d; // 用來存放轉換完畢後的2維影像
@@ -764,8 +762,12 @@ public:
         delta_2d = multiply(delta_2d, (*activation).diff(u, label));
         d_w = dot(delta_2d, transpose(img_2d)); // (filters,  batch_size * output_height * output_width)
         d_b = sum_axis1(delta_2d);
-        vector<vector<double>> d_x = dot(transpose(w), delta_2d); // (channel * k_size * k_size, batch_size * output_height * output_width)
-        vector<vector<double>> d_x_4d
+        vector<vector<double>> d_x = dot(transpose(w),
+                                         delta_2d); // (channel * k_size * k_size, batch_size * output_height * output_width)
+        vector<vector<vector<vector<double>>>> d_x_4d = img_reshape4d(
+                d_x); // (batch_size, channel, output_height, output_width).
+
+        return d_x_4d;
 
     };
 
@@ -815,9 +817,10 @@ public:
     }
 
     vector<vector<vector<vector<double>>>> img_reshape4d(vector<vector<double>> img_2d) {
-        /** @brief 將二維圖片轉換回原四維圖片 (batch_size, channel, output_height, output_width).
+        /** @brief 將二維圖片轉換回原四維圖片
           * @param img 二維圖像
-          * @return 轉換完畢後的四維圖片. */
+          * @return 轉換完畢後的四維圖片. (batch_size, channel, output_height, output_width).
+          * */
 
         int row_size = img_2d.size();
         int col_size = img_2d[0].size();
@@ -857,6 +860,24 @@ public:
         return result;
     }
 };
+
+// ==============Flatten層==============
+//class FlattenLayer : public Layer {
+//public:
+//    FlattenLayer() {
+//        layer_name = "FlattenLayer";
+//    }
+//
+//    void set_weight_bias() override {
+//        this->output_shape = input_shape;
+//    }
+//
+//    vector<vector<double>> FP(vector<vector<vector<vector<double>>>> x, bool training) {
+//
+//
+//    }
+//
+//};
 
 
 // ==============Dropout層==============
@@ -937,7 +958,7 @@ public:
 
         for (int i = 0; i < layer_list.size(); i++) {
             // 跳過dropout層
-            if (layer_list[i]->b.size() == 0) {
+            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
                 continue;
             }
             layer_list[i]->w = sub(layer_list[i]->w,
@@ -965,8 +986,8 @@ public:
         // 第一次進來前先將上一次的梯度初始化為0
         if (last_dw.size() == 0 && last_db.size() == 0) {
             for (int i = 0; i < layer_list.size(); i++) {
-                // 若是遇到dropout層，則加一個空陣列，方便後面計算
-                if (layer_list[i]->layer_name == "DropoutLayer") {
+                // 若是遇到dropout、Flatten層，則加一個空陣列，方便後面計算
+                if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
                     last_dw.push_back(generate_mat(0, 0, 0, false));
                     last_db.push_back(generate_mat(0, 0, 0, false));
                     continue;
@@ -988,8 +1009,8 @@ public:
              * Vt = Beta * Vt-1 - learning_rate * d_w
              * W = W + Vt
              */
-            // 跳過dropout層
-            if (layer_list[i]->layer_name == "DropoutLayer") {
+            // 跳過dropout、Flatten層
+            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
                 continue;
             }
             vector<vector<double>> V_w_t = multiply(last_dw[i], beta);
@@ -1054,6 +1075,11 @@ public:
                     layer_list[i + 1]->channel = layer_list[i]->filters;
                     layer_list[i + 1]->img_height = layer_list[i]->output_height;
                     layer_list[i + 1]->img_width = layer_list[i]->output_width;
+                } else if (layer_list[i + 1]->layer_name == "FlattenLayer") {
+                    layer_list[i + 1]->batch_size = layer_list[i]->batch_size;
+                    layer_list[i + 1]->input_shape = layer_list[i]->filters * layer_list[i]->output_height *
+                                                     layer_list[i]->output_width;
+
                 } else {
                     layer_list[i + 1]->input_shape = layer_list[i]->output_shape;
                 }

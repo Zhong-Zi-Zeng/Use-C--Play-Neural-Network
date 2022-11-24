@@ -49,8 +49,8 @@ cmake_ninja_workdir = C$:/Users/ximen/Desktop/c++_Neural_Network/cmake-build-deb
 
 build cmake_object_order_depends_target_for_c__: phony || CMakeFiles/for_c__.dir
 
-build CMakeFiles/for_c__.dir/main.cpp.obj: CXX_COMPILER__for_c___Debug C$:/Users/ximen/Desktop/c++_Neural_Network/main.cpp || cmake_object_order_depends_target_for_c__
-  DEP_FILE = CMakeFiles\for_c__.dir\main.cpp.obj.d
+build CMakeFiles/for_c__.dir/new_version_nn.cpp.obj: CXX_COMPILER__for_c___Debug C$:/Users/ximen/Desktop/c++_Neural_Network/new_version_nn.cpp || cmake_object_order_depends_target_for_c__
+  DEP_FILE = CMakeFiles\for_c__.dir\new_version_nn.cpp.obj.d
   FLAGS = -g -std=gnu++14
   OBJECT_DIR = CMakeFiles\for_c__.dir
   OBJECT_FILE_DIR = CMakeFiles\for_c__.dir
@@ -63,7 +63,7 @@ build CMakeFiles/for_c__.dir/main.cpp.obj: CXX_COMPILER__for_c___Debug C$:/Users
 #############################################
 # Link the executable for_c__.exe
 
-build for_c__.exe: CXX_EXECUTABLE_LINKER__for_c___Debug CMakeFiles/for_c__.dir/main.cpp.obj
+build for_c__.exe: CXX_EXECUTABLE_LINKER__for_c___Debug CMakeFiles/for_c__.dir/new_version_nn.cpp.obj
   FLAGS = -g
   LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\for_c__.dir
