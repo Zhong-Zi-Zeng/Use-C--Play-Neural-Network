@@ -13,12 +13,23 @@ typedef vector<vector<vector<double>>> _3D_MATRIX;
 typedef vector<vector<vector<vector<double>>>> _4D_MATRIX;
 
 
+void show_1d_matrix(_1D_MATRIX matrix) {
+    for (int i = 0; i < matrix.size(); i++) {
+        cout << matrix[i] << " ";
+    }
+    cout << endl;
+}
+
 // ==============================================================================
 // -- 工具 -----------------------------------------------------------------------
 // ==============================================================================
 class Matrix {
 public:
     _2D_MATRIX matrix;
+    _4D_MATRIX matrix_4d;
+    bool is_4d = false;
+    int batch = 0;
+    int channel = 0;
     int row = 0;
     int col = 0;
 
@@ -32,7 +43,7 @@ public:
          * @tparam col
          * @param arr
          */
-        _initial(row, col);
+        _initial_2d(row, col);
 
         for (int r = 0; r < row; r++) {
             for (int c = 0; c < col; c++) {
@@ -41,20 +52,55 @@ public:
         }
     }
 
+    template<size_t batch, size_t channel, size_t row, size_t col>
+    Matrix(double (&arr)[batch][channel][row][col]) {
+        /*!
+         * 將傳遞進來的4維陣列轉換為matrix類別
+         * @tparam batch
+         * @tparam channel
+         * @tparam col
+         * @tparam col
+         * @param arr
+         */
+        _initial_4d(batch, channel, row, col);
+        for (int b = 0; b < batch; b++) {
+            for (int ch = 0; ch < channel; ch++) {
+                for (int r = 0; r < row; r++) {
+                    for (int c = 0; c < col; c++) {
+                        matrix_4d[b][ch][r][c] = arr[b][ch][r][c];
+                    }
+                }
+            }
+        }
+    }
+
+    Matrix(int batch, int channel, int row, int col) {
+        _initial_4d(batch, channel, row, col);
+    }
+
     Matrix(int row, int col) {
-        _initial(row, col);
+        _initial_2d(row, col);
     }
 
     Matrix(int row, int col, double fill_value) {
-        _initial(row, col);
+        _initial_2d(row, col);
         fill(fill_value);
     }
 
-    void _initial(int row, int col) {
+    void _initial_2d(int row, int col) {
         this->row = row;
         this->col = col;
         matrix = _2D_MATRIX(row, _1D_MATRIX(col, 0));
     }
+
+    void _initial_4d(int batch, int channel, int row, int col) {
+        this->batch = batch;
+        this->channel = channel;
+        this->row = row;
+        this->col = col;
+        this->is_4d = true;
+        matrix_4d = _4D_MATRIX(batch, _3D_MATRIX(channel, _2D_MATRIX(row, _1D_MATRIX(col, 0))));
+    };
 
     Matrix operator+(Matrix &other) {
 
@@ -612,13 +658,29 @@ public:
     }
 
     void show_matrix() {
-        for (int r = 0; r < row; r++) {
-            for (int c = 0; c < col; c++) {
-                cout << setw(8) << matrix[r][c] << " ";
+        if (is_4d) {
+            for (int b = 0; b < batch; b++) {
+                for (int ch = 0; ch < channel; ch++) {
+                    for (int r = 0; r < row; r++) {
+                        for (int c = 0; c < col; c++) {
+                            cout << matrix_4d[b][ch][r][c] << " ";
+                        }
+                        cout << endl;
+                    }
+                    cout << endl;
+                }
+                cout << endl;
+            }
+
+        } else {
+            for (int r = 0; r < row; r++) {
+                for (int c = 0; c < col; c++) {
+                    cout << setw(8) << matrix[r][c] << " ";
+                }
+                cout << endl;
             }
             cout << endl;
         }
-        cout << endl;
     }
 };
 
@@ -906,12 +968,14 @@ class Categorical_crosse_entropy : public LossFunc {
 };
 
 // ==============================================================================
-// -- 隱藏層 ---------------------------------------------------------------------
+// -- 神經網路層 ---------------------------------------------------------------------
 // ==============================================================================
 class Layer {
 public:
-    int output_shape;  // 輸入維度
-    int input_shape;  // 輸出維度
+    _1D_MATRIX input_shape;  // 輸入維度 1. 純數值 2. (C, H, W)
+    _1D_MATRIX output_shape;  // 輸出維度 1. 純數值 2. (C, H, W)
+    int filters; // 卷積核數量
+    int k_size; // 卷積核大小
     bool use_bias; // 是否使用偏置值
     string layer_name; // 網路層名稱
     ActivationFunc *activation; // 激活函式
@@ -935,14 +999,15 @@ public:
 class BaseLayer : public Layer {
 public:
     BaseLayer(int input_shape, int output_shape, ActivationFunc *activation, bool use_bias = true) {
-        init(input_shape, output_shape, activation, use_bias);
+        init(_1D_MATRIX{(double) input_shape}, _1D_MATRIX{(double) output_shape}, activation, use_bias);
     }
 
     BaseLayer(int output_shape, ActivationFunc *activation, bool use_bias = true) {
-        init(output_shape, activation, use_bias);
+        init(_1D_MATRIX{(double) output_shape}, activation, use_bias);
     }
 
-    void init(int input_shape, int output_shape, ActivationFunc *activation = new sigmoid, bool use_bias = true) {
+    void init(_1D_MATRIX input_shape, _1D_MATRIX output_shape, ActivationFunc *activation = new sigmoid,
+              bool use_bias = true) {
         this->input_shape = input_shape;
         this->output_shape = output_shape;
         this->use_bias = use_bias;
@@ -950,13 +1015,13 @@ public:
         layer_name = "BaseLayer";
     }
 
-    void init(int output_shape, ActivationFunc *activation, bool use_bias = true) {
+    void init(_1D_MATRIX output_shape, ActivationFunc *activation, bool use_bias = true) {
         init(input_shape, output_shape, activation, use_bias);
     }
 
     void set_weight_bias() override {
-        w = Matrix(input_shape, output_shape);
-        b = Matrix(1, output_shape);
+        w = Matrix(input_shape[0], output_shape[0]);
+        b = Matrix(1, output_shape[0]);
         w.random();
         b.random();
     }
@@ -1034,7 +1099,199 @@ public:
     }
 };
 
-// ==============================================================================
+// ==============ConvolutionLayer層==============
+class ConvolutionLayer : public Layer {
+public:
+    ConvolutionLayer(_1D_MATRIX input_shape, int filters, int k_size, ActivationFunc *activation,
+                     bool use_bias = true) {
+        init(input_shape, filters, k_size, activation, use_bias);
+    };
+
+    ConvolutionLayer(int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
+        init(filters, k_size, activation, use_bias);
+    }
+
+    void init(_1D_MATRIX input_shape, int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
+        this->input_shape = input_shape;
+        this->filters = filters;
+        this->k_size = k_size;
+        this->activation = activation;
+        this->use_bias = use_bias;
+    };
+
+    void init(int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
+        init(input_shape, filters, k_size, activation, use_bias);
+    };
+
+    void set_weight_bias() override {
+        int output_height = input_shape[1] - k_size + 1;
+        int output_width = input_shape[2] - k_size + 1;
+        this->output_shape = _1D_MATRIX{(double) filters, (double) output_height, (double) output_width};
+
+        w = Matrix(filters, input_shape[0] * k_size * k_size);
+        b = Matrix(filters, 1);
+        w.random();
+        b.random();
+    };
+
+    Matrix FP(Matrix x, bool training) override {
+        this->x = im2col(x);
+
+        u = w.dot(this->x);
+
+        if (use_bias) {
+            u = u + b;
+        }
+
+        y = (*activation).undiff(u);
+
+        return reshape_4d(y);
+    };
+
+    Matrix BP(Matrix x, Matrix label, bool training) override {
+        Matrix delta_2d = reshape_2d(x);
+
+        delta_2d = delta_2d * (*activation).diff(u, label);
+
+        d_w = delta_2d.dot(this->x.transpose());
+        d_b = delta_2d.sum(1, true);
+
+        delta_2d = w.transpose().dot(delta_2d);
+        delta_2d = col2im(delta_2d);
+
+        return delta_2d;
+    };
+
+    Matrix im2col(Matrix &img) {
+        /** @brief 將輸入的四維圖片轉為二維矩陣形式.
+          * @param img 四維圖像 (B, C, H, W)
+          * @return 轉換完畢後的二維矩陣. */
+
+        Matrix result(img.channel * k_size * k_size, img.batch * output_shape[1] * output_shape[2]);
+
+        for (int c = 0; c < result.col; c++) {
+            for (int r = 0; r < result.row; r++) {
+                int img_batch = c / (output_shape[1] * output_shape[2]); // 目前到哪張圖
+                int img_channel = r / (k_size * k_size); // 目前到哪個通道
+                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2]; // 對應到原圖的row座標
+                int img_c = r % k_size + c % (int) output_shape[1];  // 對應到原圖的col座標
+                result.matrix[r][c] = img.matrix_4d[img_batch][img_channel][img_r][img_c];
+            }
+        }
+        return result;
+    };
+
+    Matrix col2im(Matrix &delta) {
+        /** @brief 將輸入的二維圖片轉為四維矩陣形式.
+          * @param img 二維梯度圖像 (channel * k_size * k_size, batch_size * output_height * output_width)
+          * @return 轉換完畢後的四維矩陣. (batch, channel, output_height, output_width)*/
+        int batch_size = delta.col / (output_shape[1] * output_shape[2]);
+        Matrix result(batch_size, input_shape[0], input_shape[1], input_shape[2]);
+
+        for (int c = 0; c < delta.col; c++) {
+            for (int r = 0; r < delta.row; r++) {
+                int img_batch = c / (output_shape[1] * output_shape[2]); // 目前到哪張圖
+                int img_channel = r / (k_size * k_size); // 目前到哪個通道
+                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2]; // 對應到原圖的row座標
+                int img_c = r % k_size + c % (int) output_shape[1];  // 對應到原圖的col座標
+
+                result.matrix_4d[img_batch][img_channel][img_r][img_c] = delta.matrix[r][c];
+            }
+        }
+
+        return result;
+    };
+
+    Matrix reshape_4d(Matrix &img) {
+        /** @brief 將點積完的二維矩陣reshape回四維
+          * @param img 二維圖像 (filters, batch * output_height * output_width)
+          * @return 轉換完畢後的四維圖片. (batch_size, channel, output_height, output_width).
+          * */
+
+        int batch_size = img.col / (output_shape[1] * output_shape[2]);
+        Matrix result(batch_size, filters, output_shape[1], output_shape[2]);
+
+        for (int r = 0; r < img.row; r++) {
+            for (int c = 0; c < img.col; c++) {
+                int img_batch = c / (output_shape[1] * output_shape[2]); // 對應到四維圖像的哪張圖
+                int img_r = (c / (int) output_shape[1]) % (int) output_shape[1]; // 對應到四維圖像的row座標
+                int img_c = c % (int) output_shape[2]; // 對應到四維圖像的col座標
+
+                result.matrix_4d[img_batch][r][img_r][img_c] = img.matrix[r][c];
+            }
+        }
+
+        return result;
+    };
+
+    Matrix reshape_2d(Matrix &delta) {
+        /** @brief 將四維矩陣reshape回二維
+          * @param delta 四維梯度圖像 (batch, filters, output_height, output_width)
+          * @return 轉換完畢後的二維梯度圖像. (filters, batch * output_height *output_width).
+          * */
+
+        Matrix result(filters, delta.batch * delta.row * delta.col);
+
+        for (int r = 0; r < result.row; r++) {
+            for (int c = 0; c < result.col; c++) {
+                int img_batch = c / (delta.col * delta.row); // 對應到四維圖像的哪張圖
+                int img_r = (c / delta.row) % delta.row; // 對應到四維圖像的row座標
+                int img_c = c % delta.col; // 對應到四維圖像的col座標
+                result.matrix[r][c] = delta.matrix_4d[img_batch][r][img_r][img_c];
+            }
+        }
+
+        return result;
+    };
+};
+
+
+// ==============Flatten層==============
+class FlattenLayer : public Layer {
+public:
+    void set_weight_bias() override {
+        double temp = 1;
+        for (int i = 0; i < input_shape.size(); i++) {
+            temp *= input_shape[i];
+        }
+        this->output_shape = _1D_MATRIX{temp};
+    };
+
+    Matrix FP(Matrix x, bool training) override {
+        Matrix result(x.batch, x.channel * x.row * x.col);
+
+        for (int b = 0; b < x.batch; b++) {
+            for (int ch = 0; ch < x.channel; ch++) {
+                for (int r = 0; r < x.row; r++) {
+                    for (int c = 0; c < x.col; c++) {
+                        result.matrix[b][ch * x.row * x.col + r * x.row + c % x.col] = x.matrix_4d[b][ch][r][c];
+                    }
+                }
+            }
+        }
+
+        return result;
+    };
+
+    Matrix BP(Matrix x, Matrix label, bool training) override {
+        Matrix result(x.row, input_shape[0], input_shape[1], input_shape[2]);
+
+        for (int b = 0; b < result.batch; b++) {
+            for (int ch = 0; ch < result.channel; ch++) {
+                for (int r = 0; r < result.row; r++) {
+                    for (int c = 0; c < result.col; c++) {
+                        result.matrix_4d[b][ch][r][c] = x.matrix[b][ch * result.row * result.col + r * result.row + c % result.col];
+                    }
+                }
+            }
+        }
+
+        return result;
+    };
+};
+
+
+// ========================================================================
 // -- 優化器 ---------------------------------------------------------------------
 // ==============================================================================
 class Optimizer {
@@ -1127,7 +1384,7 @@ public:
 
 // ==============================================================================
 // -- 序列模型 -------------------------------------------------------------------
-// ==============================================================================
+// ====================================================================================
 class Sequential {
 public:
     int epoch;  // 訓練次數
@@ -1163,49 +1420,83 @@ public:
     // 訓練
     void fit(Matrix &train_x, Matrix &train_y) {
         for (int e = 0; e < epoch; e++) {
-            for (int b = 0; b < train_x.row; b += batch_size) {
-                // 每次訓練讀取batch size 的資料去訓練
-                Matrix batch_x = get_batch_data(train_x, b,
-                                                min((int) b + batch_size, (int) train_x.row));
-                Matrix batch_y = get_batch_data(train_y, b,
-                                                min((int) b + batch_size, (int) train_y.row));
-                // 前向傳播
-                Matrix output = FP(batch_x);
+            if (train_x.is_4d) {
+                for (int b = 0; b < train_x.batch; b += batch_size) {
+                    Matrix batch_x = get_batch_data(train_x, b,
+                                                    min((int) b + batch_size, (int) train_x.batch));
+                    Matrix batch_y = get_batch_data(train_y, b,
+                                                    min((int) b + batch_size, (int) train_y.row));
+                    // 前向傳播
+                    Matrix output = FP(batch_x);
 
-                // 反向傳播
-                BP(output, batch_y);
+                    // 反向傳播
+                    BP(output, batch_y);
 
-                // 梯度更新
-                update_weight();
+                    // 梯度更新
+                    update_weight();
 
-                // 顯示訓練進度
-//                cout << "\r" << "Epoch:" << e;
-
-
-                // 顯示訓練資料
-                if (e == epoch - 1) {
-                    cout << "========================" << endl;
-                    cout << "Pre:" << endl;
-                    output.show_matrix();
-                    cout << "Label:" << endl;
-                    batch_y.show_matrix();
-                    cout << "Loss:" << endl;
-                    cout << (*loss).undiff(output, batch_y) << endl;
-                    cout << "========================" << endl;
+                    if (e == epoch - 1) {
+                        cout << "========================" << endl;
+                        cout << "Pre:" << endl;
+                        output.show_matrix();
+                        cout << "Label:" << endl;
+                        batch_y.show_matrix();
+                        cout << "Loss:" << endl;
+                        cout << (*loss).undiff(output, batch_y) << endl;
+                        cout << "========================" << endl;
+                    }
                 }
+            } else {
+                for (int b = 0; b < train_x.row; b += batch_size) {
+                    // 每次訓練讀取batch size 的資料去訓練
+                    Matrix batch_x = get_batch_data(train_x, b,
+                                                    min((int) b + batch_size, (int) train_x.row));
+                    Matrix batch_y = get_batch_data(train_y, b,
+                                                    min((int) b + batch_size, (int) train_y.row));
 
+                    // 前向傳播
+                    Matrix output = FP(batch_x);
+
+                    // 反向傳播
+//                    BP(output, batch_y);
+
+                    // 梯度更新
+//                    update_weight();
+
+                    // 顯示訓練資料
+                    if (e == epoch - 1) {
+                        cout << "========================" << endl;
+                        cout << "Pre:" << endl;
+                        output.show_matrix();
+                        cout << "Label:" << endl;
+                        batch_y.show_matrix();
+                        cout << "Loss:" << endl;
+                        cout << (*loss).undiff(output, batch_y) << endl;
+                        cout << "========================" << endl;
+                    }
+
+                }
             }
+
+
         }
     }
 
-    // 將資料分成 Batchsize
+    // 將資料分成 BatchSize
     static inline Matrix get_batch_data(Matrix &train_data, int start, int end) {
-        Matrix result(end - start, train_data.col);
-
-        for (int i = 0; i < (end - start); i++) {
-            result.matrix[i] = train_data.matrix[start + i];
+        if (train_data.is_4d) {
+            Matrix result(end - start, train_data.channel, train_data.row, train_data.col);
+            for (int i = 0; i < (end - start); i++) {
+                result.matrix_4d[i] = train_data.matrix_4d[start + i];
+            }
+            return result;
+        } else {
+            Matrix result(end - start, train_data.col);
+            for (int i = 0; i < (end - start); i++) {
+                result.matrix[i] = train_data.matrix[start + i];
+            }
+            return result;
         }
-        return result;
     }
 
     // 驗證
@@ -1251,59 +1542,45 @@ public:
 int main() {
     srand(time(NULL));
     // 超參數
-    int EPOCH = 1000; // 學習次數
-    int BATCH_SIZE = 5;  // 批量大小
+    int EPOCH = 100; // 學習次數
+    int BATCH_SIZE = 3;  // 批量大小
     double LEARNING_RATE = 0.2;  // 學習率
 
     // 訓練資料
-    double train_x[5][25] = {{0, 1, 1, 0, 0,
-                                     0, 0, 1, 0, 0,
-                                     0, 0, 1, 0, 0,
-                                     0, 0, 1, 0, 0,
-                                     0, 1, 1, 1, 0},
-                             {1, 1, 1, 1, 0,
-                                     0, 0, 0, 0, 1,
-                                     0, 1, 1, 1, 0,
-                                     1, 0, 0, 0, 0,
-                                     1, 1, 1, 1, 1},
-                             {1, 1, 1, 1, 0,
-                                     0, 0, 0, 0, 1,
-                                     0, 1, 1, 1, 0,
-                                     0, 0, 1, 0, 1,
-                                     1, 1, 1, 1, 0},
-                             {0, 0, 0, 1, 0,
-                                     0, 0, 1, 1, 0,
-                                     0, 1, 0, 1, 0,
-                                     1, 1, 1, 1, 1,
-                                     0, 0, 0, 1, 0},
-                             {1, 1, 1, 1, 1,
-                                     1, 0, 0, 0, 0,
-                                     1, 1, 1, 1, 0,
-                                     0, 0, 0, 0, 1,
-                                     1, 1, 1, 1, 0}};
-
-    double train_y[5][5] = {{1, 0, 0, 0, 0},
-                            {0, 1, 0, 0, 0},
-                            {0, 0, 1, 0, 0},
-                            {0, 0, 0, 1, 0},
-                            {0, 0, 0, 0, 1}};
-
-//    double train_y[4][1] = {{1},
-//                            {0},
-//                            {0},
-//                            {1}};
+    double img[3][1][4][4] = {{{{0, 1, 1, 0},
+                                       {0, 1, 1, 0},
+                                       {0, 1, 0, 1},
+                                       {1, 0, 1, 1}}},
 
 
-    // 將訓練資料轉為Matrix類別
-    Matrix train_x_matrix = Matrix(train_x);
-    Matrix train_y_matrix = Matrix(train_y);
+                              {{{0, 1, 1, 0},
+                                       {0, 1, 1, 1},
+                                       {0, 0, 0, 0},
+                                       {1, 1, 1, 1}}},
+
+
+                              {{{0, 1, 1, 0},
+                                       {0, 1, 0, 1},
+                                       {0, 1, 0, 1},
+                                       {0, 1, 0, 1}}}};
+
+    double target[3][4] = {{1, 0, 0, 0},
+                           {0, 1, 0, 0},
+                           {0, 0, 0, 1}};
+
+    Matrix train_x_matrix(img);
+    Matrix train_y_matrix(target);
+
 
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
     Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.7));
 
-    module.add(new BaseLayer(25, 16, new sigmoid));
+    module.add(new ConvolutionLayer(_1D_MATRIX{1, 4, 4}, 5, 2, new sigmoid));
+    module.add(new ConvolutionLayer(5, 2, new sigmoid));
+    module.add(new FlattenLayer());
+//    module.add(new BaseLayer(16, new sigmoid));
 //    module.add(new Dropout(0.2));
-    module.add(new BaseLayer(5, new softmax));
+    module.add(new BaseLayer(4, new softmax));
     module.compile();
 
     // 訓練

@@ -751,6 +751,7 @@ public:
             u = add(u, b);
         }
 
+
         y = (*activation).undiff(u);
 
         return img_reshape4d(y);
