@@ -378,7 +378,7 @@ public:
         return result;
     }
 
-    Matrix dot(Matrix &&other){
+    Matrix dot(Matrix &&other) {
         return this->dot(other);
     }
 
@@ -455,7 +455,7 @@ public:
          *  @return double result
          */
 
-        if (axis == 0){
+        if (axis == 0) {
             Matrix result(1, col);
             for (int i = 0; i < col; i++) {
                 for (int j = 0; j < row; j++) {
@@ -465,7 +465,7 @@ public:
             }
             return result;
 
-        }else if(axis == 1 && keep_dim){
+        } else if (axis == 1 && keep_dim) {
             Matrix result(row, 1);
             for (int i = 0; i < row; i++) {
                 for (int j = 0; j < col; j++) {
@@ -475,7 +475,7 @@ public:
             }
             return result;
 
-        }else{
+        } else {
             Matrix result(1, row);
             for (int i = 0; i < row; i++) {
                 for (int j = 0; j < col; j++) {
@@ -523,7 +523,7 @@ public:
          *  @return double result
          */
 
-        if (axis == 0){
+        if (axis == 0) {
             Matrix result(1, col);
             for (int i = 0; i < col; i++) {
                 for (int j = 0; j < row; j++) {
@@ -532,7 +532,7 @@ public:
             }
             return result;
 
-        }else if(axis == 1 && keep_dim){
+        } else if (axis == 1 && keep_dim) {
             Matrix result(row, 1);
             for (int i = 0; i < row; i++) {
                 for (int j = 0; j < col; j++) {
@@ -541,7 +541,7 @@ public:
             }
             return result;
 
-        }else{
+        } else {
             Matrix result(1, row);
             for (int i = 0; i < row; i++) {
                 for (int j = 0; j < col; j++) {
@@ -680,21 +680,21 @@ Matrix operator/(double i, Matrix matrix) {
 // ==============================================================================
 class ActivationFunc {
 public:
-    virtual Matrix undiff(Matrix m) = 0;
+    virtual Matrix undiff(Matrix &m) = 0;
 
-    virtual Matrix diff(Matrix m, Matrix label) = 0;
+    virtual Matrix diff(Matrix &m, Matrix &label) = 0;
 };
 
 // ==============sigmoid==============
 class sigmoid : public ActivationFunc {
 public:
-    Matrix undiff(Matrix m) override {
+    Matrix undiff(Matrix &m) override {
         Matrix result = 1. / (1 + Matrix::exp(-1 * m));
 
         return result;
     }
 
-    Matrix diff(Matrix m, Matrix label) override{
+    Matrix diff(Matrix &m, Matrix &label) override {
         Matrix y = undiff(m);
         Matrix result = y * (1. - y);
 
@@ -706,7 +706,7 @@ public:
 // ==============relu==============
 class relu : public ActivationFunc {
 public:
-    Matrix undiff(Matrix m) override {
+    Matrix undiff(Matrix &m) override {
         Matrix result(m.row, m.col);
 
         for (int r = 0; r < m.row; r++) {
@@ -714,12 +714,12 @@ public:
                 result.matrix[r][c] = (m.matrix[r][c] > 0) ? m.matrix[r][c] : 0;
             }
         }
-        return result;
 
+        return result;
     }
 
-    Matrix diff(Matrix m, Matrix label) override {
-        Matrix result(m.row, m.col, 0);
+    Matrix diff(Matrix &m, Matrix &label) override {
+        Matrix result(m.row, m.col);
 
         for (int r = 0; r < m.row; r++) {
             for (int c = 0; c < m.col; c++) {
@@ -733,11 +733,11 @@ public:
 // ==============linear==============
 class linear : public ActivationFunc {
 public:
-    Matrix undiff(Matrix m) override {
+    Matrix undiff(Matrix &m) override {
         return m;
     }
 
-    Matrix diff(Matrix m, Matrix label) override {
+    Matrix diff(Matrix &m, Matrix &label) override {
         return Matrix(m.row, m.col, 1);
     }
 };
@@ -745,19 +745,14 @@ public:
 // ==============softmax==============
 class softmax : public ActivationFunc {
 public:
-    Matrix undiff(Matrix m) override {
+    Matrix undiff(Matrix &m) override {
         // 把所有元素減去最大值
         double max_num = m.maximize();
         Matrix new_m = m - max_num;
 
         // 對每一列求exp總和
-        Matrix exp_sum(new_m.row, 1);
+        Matrix exp_sum = Matrix::exp(new_m).sum(1, true);
 
-        for (int r = 0; r < new_m.row; r++) {
-            for (int c = 0; c < new_m.col; c++) {
-                exp_sum.matrix[r][0] += std::exp(new_m.matrix[r][c]);
-            }
-        }
         // 將所有元素都以exp為底
         Matrix exp_m = Matrix::exp(new_m);
 
@@ -772,7 +767,7 @@ public:
         return result;
     }
 
-    Matrix diff(Matrix m, Matrix label) override {
+    Matrix diff(Matrix &m, Matrix &label) override {
         /*
          * 使用softmax的話，其反向傳播公式如下:
          *
@@ -910,7 +905,6 @@ class Categorical_crosse_entropy : public LossFunc {
     }
 };
 
-
 // ==============================================================================
 // -- 隱藏層 ---------------------------------------------------------------------
 // ==============================================================================
@@ -1008,7 +1002,7 @@ public:
         this->x = x;
 
         // 如果不是在訓練過程，則直接返回輸入值
-        if (training == false) {
+        if (!training) {
             x = x * (1. - prob);
             return x;
         } else {
@@ -1057,7 +1051,7 @@ public:
         this->learning_rate = learning_rate;
     }
 
-    void gradient_decent(vector<Layer *> layer_list) override{
+    void gradient_decent(vector<Layer *> layer_list) override {
         /* 更新公式如下：
          * Wt = Wt - learning_rate * d_w
          */
@@ -1077,23 +1071,24 @@ class Momentum : public Optimizer {
 public:
     double beta = 0.9;  // Beta 為常數，通常設定為0.9
     bool initial_flag = true;
-    vector<Matrix> last_dw;  // 用來存放上一次weight 的梯度
-    vector<Matrix> last_db;  // 用來存放上一次bias 的梯度
+    vector<Matrix> last_v_w;  // 用來存放上一次weight的慣性
+    vector<Matrix> last_v_b;  // 用來存放上一次bias的慣性
 
     Momentum(double learning_rate, double beta) {
         this->learning_rate = learning_rate;
         this->beta = beta;
     }
 
-    void gradient_decent(vector<Layer *> layer_list) override{
-        // 第一次進來前先初始化last_dw和last_db
+    void gradient_decent(vector<Layer *> layer_list) override {
+        // 第一次進來前先初始化last_v_w和last_v_b
         if (initial_flag) {
             initial_flag = false;
+
             for (int i = 0; i < layer_list.size(); i++) {
                 // 若是遇到dropout、Flatten層，則加一個空陣列，方便後面計算
                 if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
-                    last_dw.emplace_back(0, 0);
-                    last_db.emplace_back(0, 0);
+                    last_v_w.emplace_back(Matrix(0, 0));
+                    last_v_b.emplace_back(Matrix(0, 0));
                     continue;
                 }
 
@@ -1102,8 +1097,8 @@ public:
                 int bias_row_size = layer_list[i]->b.row;
                 int bias_col_size = layer_list[i]->b.col;
 
-                last_dw[i] = Matrix(weight_row_size, weight_col_size);
-                last_db[i] = Matrix(bias_row_size, bias_col_size);
+                last_v_w.emplace_back(Matrix(weight_row_size, weight_col_size));
+                last_v_b.emplace_back(Matrix(bias_row_size, bias_col_size));
             }
         }
 
@@ -1118,12 +1113,12 @@ public:
                 continue;
             }
 
-            Matrix V_w_t = last_dw[i] * beta - learning_rate * layer_list[i]->d_w;
-            last_dw[i] = V_w_t;
+            Matrix V_w_t = last_v_w[i] * beta - learning_rate * layer_list[i]->d_w;
+            last_v_w[i] = V_w_t;
             layer_list[i]->w = layer_list[i]->w + V_w_t;
 
-            Matrix V_b_t = last_db[i] * beta - learning_rate * layer_list[i]->d_b;
-            last_db[i] = V_b_t;
+            Matrix V_b_t = last_v_b[i] * beta - learning_rate * layer_list[i]->d_b;
+            last_v_b[i] = V_b_t;
             layer_list[i]->b = layer_list[i]->b + V_b_t;
         }
     }
@@ -1174,10 +1169,18 @@ public:
                                                 min((int) b + batch_size, (int) train_x.row));
                 Matrix batch_y = get_batch_data(train_y, b,
                                                 min((int) b + batch_size, (int) train_y.row));
-
+                // 前向傳播
                 Matrix output = FP(batch_x);
+
+                // 反向傳播
                 BP(output, batch_y);
+
+                // 梯度更新
                 update_weight();
+
+                // 顯示訓練進度
+//                cout << "\r" << "Epoch:" << e;
+
 
                 // 顯示訓練資料
                 if (e == epoch - 1) {
@@ -1240,7 +1243,7 @@ public:
     }
 
     // 更新權重
-    inline void update_weight() {
+    inline void update_weight() const {
         opt->gradient_decent(layer_list);
     }
 };
@@ -1249,20 +1252,42 @@ int main() {
     srand(time(NULL));
     // 超參數
     int EPOCH = 1000; // 學習次數
-    int BATCH_SIZE = 4;  // 批量大小
+    int BATCH_SIZE = 5;  // 批量大小
     double LEARNING_RATE = 0.2;  // 學習率
 
     // 訓練資料
-    double train_x[4][3] = {{0, 0, 1},
-                            {0, 1, 1},
-                            {1, 0, 1},
-                            {1, 1, 1}};
+    double train_x[5][25] = {{0, 1, 1, 0, 0,
+                                     0, 0, 1, 0, 0,
+                                     0, 0, 1, 0, 0,
+                                     0, 0, 1, 0, 0,
+                                     0, 1, 1, 1, 0},
+                             {1, 1, 1, 1, 0,
+                                     0, 0, 0, 0, 1,
+                                     0, 1, 1, 1, 0,
+                                     1, 0, 0, 0, 0,
+                                     1, 1, 1, 1, 1},
+                             {1, 1, 1, 1, 0,
+                                     0, 0, 0, 0, 1,
+                                     0, 1, 1, 1, 0,
+                                     0, 0, 1, 0, 1,
+                                     1, 1, 1, 1, 0},
+                             {0, 0, 0, 1, 0,
+                                     0, 0, 1, 1, 0,
+                                     0, 1, 0, 1, 0,
+                                     1, 1, 1, 1, 1,
+                                     0, 0, 0, 1, 0},
+                             {1, 1, 1, 1, 1,
+                                     1, 0, 0, 0, 0,
+                                     1, 1, 1, 1, 0,
+                                     0, 0, 0, 0, 1,
+                                     1, 1, 1, 1, 0}};
 
-    double train_y[4][2] = {{1, 0},
-                            {0, 1},
-                            {0, 1},
-                            {1, 0}};
-//
+    double train_y[5][5] = {{1, 0, 0, 0, 0},
+                            {0, 1, 0, 0, 0},
+                            {0, 0, 1, 0, 0},
+                            {0, 0, 0, 1, 0},
+                            {0, 0, 0, 0, 1}};
+
 //    double train_y[4][1] = {{1},
 //                            {0},
 //                            {0},
@@ -1274,11 +1299,11 @@ int main() {
     Matrix train_y_matrix = Matrix(train_y);
 
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
-    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.4));
+    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.7));
 
-    module.add(new BaseLayer(3, 16, new sigmoid));
+    module.add(new BaseLayer(25, 16, new sigmoid));
 //    module.add(new Dropout(0.2));
-    module.add(new BaseLayer(2, new softmax));
+    module.add(new BaseLayer(5, new softmax));
     module.compile();
 
     // 訓練
@@ -1286,8 +1311,6 @@ int main() {
 
     // 驗證
 //    module.evaluate(val_x, val_y);
-
-//    cout <<  << endl;
 
     return 0;
 }
