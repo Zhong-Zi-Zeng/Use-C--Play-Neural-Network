@@ -4,14 +4,16 @@
 #include <math.h>
 #include <algorithm>
 #include <time.h>
+#include <stdlib.h>
 #include <vector>
+#include <fstream>
+
 
 using namespace std;
 typedef vector<double> _1D_MATRIX;
 typedef vector<vector<double>> _2D_MATRIX;
 typedef vector<vector<vector<double>>> _3D_MATRIX;
 typedef vector<vector<vector<vector<double>>>> _4D_MATRIX;
-
 
 void show_1d_matrix(_1D_MATRIX matrix) {
     for (int i = 0; i < matrix.size(); i++) {
@@ -21,7 +23,7 @@ void show_1d_matrix(_1D_MATRIX matrix) {
 }
 
 // ==============================================================================
-// -- 工具 -----------------------------------------------------------------------
+// -- Matrix -----------------------------------------------------------------------
 // ==============================================================================
 class Matrix {
 public:
@@ -644,7 +646,7 @@ public:
     void random() {
         for (int r = 0; r < row; r++) {
             for (int c = 0; c < col; c++) {
-                matrix[r][c] = 2 * rand() / (RAND_MAX + 1.0) - 1;
+                matrix[r][c] = (2 * rand() / (RAND_MAX + 1.0) - 1) / 20.;
             }
         }
     }
@@ -735,6 +737,76 @@ Matrix operator/(double i, Matrix matrix) {
         }
     }
     return result;
+}
+
+
+// ==============================================================================
+// -- 讀取影像、Label -------------------------------------------------------------
+// ==============================================================================
+void isFileExists(std::ifstream &file, string file_name) {
+    if (!file.good()) {
+        cout << file_name << "File dose not exist." << endl;
+        exit(0);
+    }
+}
+
+Matrix *load_images(string file_name, int length) {
+    char pix[784]; // 用來暫存二進制資料
+    Matrix *img_matrix = new Matrix(length, 1, 28, 28); // 存放影像
+    std::ifstream file;
+    file.open(file_name, ios::binary); // 用二進制方式讀取檔案
+    isFileExists(file, file_name);  // 確認檔案是否存在
+
+    // 先拿出前面16bytes不必要的資訊
+    char p[16];
+    file.read(p, 16);
+
+    // 讀取影像
+    for (int b = 0; b < length; b++) {
+        file.read(pix, 784);
+        for (int r = 0; r < 28; r++) {
+            for (int c = 0; c < 28; c++) {
+                img_matrix->matrix_4d[b][0][r][c] = (unsigned char) pix[r * 28 + c] / 255.;
+            }
+        }
+    }
+
+    // 關閉檔案
+    file.close();
+
+    return img_matrix;
+}
+
+Matrix *load_label(string file_name, int length) {
+    char label[1];// 用來暫存二進制資料
+    Matrix *label_matrix = new Matrix(length, 1);  // 存放label
+    std::ifstream file;
+    file.open(file_name, ios::binary); // 用二進制方式讀取檔案
+    isFileExists(file, file_name); // 確認檔案是否存在
+
+    // 先拿出前面8bytes不必要的資訊
+    char p[8];
+    file.read(p, 8);
+
+    // 讀取label
+    for (int i = 0; i < length; i++) {
+        file.read(label, 1);
+        label_matrix->matrix[i][0] = (unsigned char) label[0];
+    }
+
+    // 關閉檔案
+    file.close();
+
+    return label_matrix;
+}
+
+Matrix *one_hot_code(Matrix &label) {
+    Matrix *one_hot_code_matrix = new Matrix(label.row, 10);
+
+    for (int i = 0; i < label.row; i++) {
+        one_hot_code_matrix->matrix[i][label.matrix[i][0]] = 1.;
+    }
+    return one_hot_code_matrix;
 }
 
 // ==============================================================================
@@ -946,7 +1018,7 @@ class Categorical_crosse_entropy : public LossFunc {
         Matrix result(row_size, col_size);
 
         for (int r = 0; r < row_size; r++) {
-            // 用來存訪label對應的類別
+            // 用來存放label對應的類別
             int cls;
 
             // 找出label對應的類別
@@ -976,6 +1048,7 @@ public:
     _1D_MATRIX output_shape;  // 輸出維度 1. 純數值 2. (C, H, W)
     int filters; // 卷積核數量
     int k_size; // 卷積核大小
+    int stride; // 步長
     bool use_bias; // 是否使用偏置值
     string layer_name; // 網路層名稱
     ActivationFunc *activation; // 激活函式
@@ -1102,31 +1175,33 @@ public:
 // ==============ConvolutionLayer層==============
 class ConvolutionLayer : public Layer {
 public:
-    ConvolutionLayer(_1D_MATRIX input_shape, int filters, int k_size, ActivationFunc *activation,
+    ConvolutionLayer(_1D_MATRIX input_shape, int filters, int k_size, int stride, ActivationFunc *activation,
                      bool use_bias = true) {
-        init(input_shape, filters, k_size, activation, use_bias);
+        init(input_shape, filters, k_size, stride, activation, use_bias);
     };
 
-    ConvolutionLayer(int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
-        init(filters, k_size, activation, use_bias);
+    ConvolutionLayer(int filters, int k_size, int stride, ActivationFunc *activation, bool use_bias = true) {
+        init(filters, k_size, stride, activation, use_bias);
     }
 
-    void init(_1D_MATRIX input_shape, int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
+    void init(_1D_MATRIX input_shape, int filters, int k_size, int stride, ActivationFunc *activation,
+              bool use_bias = true) {
         this->input_shape = input_shape;
         this->filters = filters;
         this->k_size = k_size;
+        this->stride = stride;
         this->activation = activation;
         this->use_bias = use_bias;
     };
 
-    void init(int filters, int k_size, ActivationFunc *activation, bool use_bias = true) {
-        init(input_shape, filters, k_size, activation, use_bias);
+    void init(int filters, int k_size, int stride, ActivationFunc *activation, bool use_bias = true) {
+        init(input_shape, filters, k_size, stride, activation, use_bias);
     };
 
     void set_weight_bias() override {
-        int output_height = input_shape[1] - k_size + 1;
-        int output_width = input_shape[2] - k_size + 1;
-        this->output_shape = _1D_MATRIX{(double) filters, (double) output_height, (double) output_width};
+        double output_height = (input_shape[1] - k_size) / stride + 1;
+        double output_width = (input_shape[2] - k_size) / stride + 1;
+        this->output_shape = _1D_MATRIX{(double) filters, output_height, output_width};
 
         w = Matrix(filters, input_shape[0] * k_size * k_size);
         b = Matrix(filters, 1);
@@ -1173,8 +1248,9 @@ public:
             for (int r = 0; r < result.row; r++) {
                 int img_batch = c / (output_shape[1] * output_shape[2]); // 目前到哪張圖
                 int img_channel = r / (k_size * k_size); // 目前到哪個通道
-                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2]; // 對應到原圖的row座標
-                int img_c = r % k_size + c % (int) output_shape[1];  // 對應到原圖的col座標
+                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2] +
+                            (c / stride) % stride; // 對應到原圖的row座標
+                int img_c = r % k_size + c % (int) output_shape[1] + c % stride;  // 對應到原圖的col座標
                 result.matrix[r][c] = img.matrix_4d[img_batch][img_channel][img_r][img_c];
             }
         }
@@ -1192,8 +1268,9 @@ public:
             for (int r = 0; r < delta.row; r++) {
                 int img_batch = c / (output_shape[1] * output_shape[2]); // 目前到哪張圖
                 int img_channel = r / (k_size * k_size); // 目前到哪個通道
-                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2]; // 對應到原圖的row座標
-                int img_c = r % k_size + c % (int) output_shape[1];  // 對應到原圖的col座標
+                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2] +
+                            (c / stride) % stride; // 對應到原圖的row座標
+                int img_c = r % k_size + c % (int) output_shape[1] + c % stride;  // 對應到原圖的col座標
 
                 result.matrix_4d[img_batch][img_channel][img_r][img_c] = delta.matrix[r][c];
             }
@@ -1245,7 +1322,6 @@ public:
     };
 };
 
-
 // ==============Flatten層==============
 class FlattenLayer : public Layer {
 public:
@@ -1255,6 +1331,7 @@ public:
             temp *= input_shape[i];
         }
         this->output_shape = _1D_MATRIX{temp};
+        layer_name = "FlattenLayer";
     };
 
     Matrix FP(Matrix x, bool training) override {
@@ -1280,7 +1357,8 @@ public:
             for (int ch = 0; ch < result.channel; ch++) {
                 for (int r = 0; r < result.row; r++) {
                     for (int c = 0; c < result.col; c++) {
-                        result.matrix_4d[b][ch][r][c] = x.matrix[b][ch * result.row * result.col + r * result.row + c % result.col];
+                        result.matrix_4d[b][ch][r][c] = x.matrix[b][ch * result.row * result.col + r * result.row +
+                                                                    c % result.col];
                     }
                 }
             }
@@ -1288,6 +1366,174 @@ public:
 
         return result;
     };
+};
+
+// ==============MaxPooling層==============
+class MaxpoolingLayer : public Layer {
+public:
+    Matrix max_matrix; // 用來記錄最大值的位置
+
+    MaxpoolingLayer(int k_size) {
+        this->k_size = k_size;
+        this->stride = k_size;
+        this->layer_name = "MaxpoolingLayer";
+    }
+
+    void set_weight_bias() override {
+        int output_height = ((int) input_shape[1] % k_size == 0) ? input_shape[1] / k_size : input_shape[1] / k_size +
+                                                                                             1;
+        int output_width = ((int) input_shape[2] % k_size == 0) ? input_shape[2] / k_size : input_shape[2] / k_size + 1;
+        this->output_shape = _1D_MATRIX{input_shape[0], (double) output_height, (double) output_width};
+        this->filters = input_shape[0];
+
+    }
+
+    Matrix FP(Matrix x, bool training) override {
+        this->x = im2col(x);
+
+        this->max_matrix = Matrix(this->x.row, this->x.col);
+        Matrix result = find_maximize(this->x);
+
+        return reshape_4d(result);
+    }
+
+    Matrix BP(Matrix x, Matrix label, bool training) override {
+        Matrix delta_2d = reshape_2d(x);
+
+        Matrix result(this->x.row, this->x.col);
+
+        for (int c = 0; c < max_matrix.col; c++) {
+            for (int r = 0; r < max_matrix.row; r++) {
+                if (max_matrix.matrix[r][c] == 1) {
+                    result.matrix[r][c] = delta_2d.matrix[r / (k_size * k_size)][c];
+                }
+            }
+        }
+        result = col2im(result);
+
+        return result;
+    }
+
+    Matrix im2col(Matrix &img) {
+        /** @brief 將輸入的四維圖片轉為二維矩陣形式.
+          * @param img 四維圖像 (B, C, H, W)
+          * @return 轉換完畢後的二維矩陣. */
+
+        Matrix result(img.channel * k_size * k_size, img.batch * output_shape[1] * output_shape[2]);
+        for (int c = 0; c < result.col; c++) {
+            for (int r = 0; r < result.row; r++) {
+                int img_batch = c / (output_shape[1] * output_shape[2]); // 目前到哪張圖
+                int img_channel = r / (k_size * k_size); // 目前到哪個通道
+                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2] +
+                            (c / stride) % stride; // 對應到原圖的row座標
+                int img_c = r % k_size + c % (int) output_shape[1] + c % stride;  // 對應到原圖的col座標
+
+                if (img_batch >= img.batch || img_channel >= img.channel || img_r >= img.row || img_c >= img.col) {
+                    continue;
+                }
+                result.matrix[r][c] = img.matrix_4d[img_batch][img_channel][img_r][img_c];
+            }
+        }
+        return result;
+    };
+
+    Matrix col2im(Matrix &delta) {
+        /** @brief 將輸入的二維圖片轉為四維矩陣形式.
+          * @param img 二維梯度圖像 (channel * k_size * k_size, batch_size * output_height * output_width)
+          * @return 轉換完畢後的四維矩陣. (batch, channel, output_height, output_width)*/
+        int batch_size = delta.col / (output_shape[1] * output_shape[2]);
+        Matrix result(batch_size, input_shape[0], input_shape[1], input_shape[2]);
+
+        for (int c = 0; c < delta.col; c++) {
+            for (int r = 0; r < delta.row; r++) {
+                int img_batch = c / (output_shape[1] * output_shape[2]); // 目前到哪張圖
+                int img_channel = r / (k_size * k_size); // 目前到哪個通道
+                int img_r = (r / k_size) % k_size + (c / (int) output_shape[2]) % (int) output_shape[2] +
+                            (c / stride) % stride; // 對應到原圖的row座標
+                int img_c = r % k_size + c % (int) output_shape[1] + c % stride;  // 對應到原圖的col座標
+
+//                if (img_batch >= result.batch || img_channel >= result.channel || img_r >= result.row || img_c >= result.col){
+//                    continue;
+//                }
+
+                result.matrix_4d[img_batch][img_channel][img_r][img_c] = delta.matrix[r][c];
+            }
+        }
+
+        return result;
+    };
+
+    Matrix reshape_4d(Matrix &img) {
+        /** @brief 將點積完的二維矩陣reshape回四維
+          * @param img 二維圖像 (filters, batch * output_height * output_width)
+          * @return 轉換完畢後的四維圖片. (batch_size, channel, output_height, output_width).
+          * */
+
+        int batch_size = img.col / (output_shape[1] * output_shape[2]);
+        Matrix result(batch_size, filters, output_shape[1], output_shape[2]);
+
+        for (int r = 0; r < img.row; r++) {
+            for (int c = 0; c < img.col; c++) {
+                int img_batch = c / (output_shape[1] * output_shape[2]); // 對應到四維圖像的哪張圖
+                int img_r = (c / (int) output_shape[1]) % (int) output_shape[1]; // 對應到四維圖像的row座標
+                int img_c = c % (int) output_shape[2]; // 對應到四維圖像的col座標
+
+                result.matrix_4d[img_batch][r][img_r][img_c] = img.matrix[r][c];
+            }
+        }
+
+        return result;
+    };
+
+    Matrix reshape_2d(Matrix &delta) {
+        /** @brief 將四維矩陣reshape回二維
+          * @param delta 四維梯度圖像 (batch, filters, output_height, output_width)
+          * @return 轉換完畢後的二維梯度圖像. (filters, batch * output_height *output_width).
+          * */
+
+        Matrix result(filters, delta.batch * delta.row * delta.col);
+
+        for (int r = 0; r < result.row; r++) {
+            for (int c = 0; c < result.col; c++) {
+                int img_batch = c / (delta.col * delta.row); // 對應到四維圖像的哪張圖
+                int img_r = (c / delta.row) % delta.row; // 對應到四維圖像的row座標
+                int img_c = c % delta.col; // 對應到四維圖像的col座標
+                result.matrix[r][c] = delta.matrix_4d[img_batch][r][img_r][img_c];
+            }
+        }
+
+        return result;
+    };
+
+    Matrix find_maximize(Matrix &x) {
+        /**
+        * @brief 從轉換好的二維影像矩陣中，找出最大值與最大值的位置
+        * @param img 二維梯度圖像 (channel * k_size * k_size, batch_size * output_height * output_width)
+        * @return Maxpooling完後的四維矩陣. (batch, channel, output_height, output_width)*/
+        Matrix result(x.row / (k_size * k_size), x.col);
+
+        double max_num = -100;
+        int max_r, max_c;
+
+        for (int c = 0; c < x.col; c++) {
+            for (int r = 0; r < x.row; r++) {
+                if (x.matrix[r][c] > max_num) {
+                    max_num = x.matrix[r][c];
+                    max_r = r;
+                    max_c = c;
+                }
+
+                if ((r + 1) % (k_size * k_size) == 0) {
+                    result.matrix[r / (k_size * k_size)][c] = max_num;
+                    max_matrix.matrix[max_r][max_c] = 1;
+                    max_num = -100;
+                }
+            }
+        }
+
+        return result;
+    }
+
 };
 
 
@@ -1298,7 +1544,7 @@ class Optimizer {
 public:
     double learning_rate;
 
-    virtual void gradient_decent(vector<Layer *> layer_list) = 0;
+    virtual void gradient_decent(vector<Layer *> layer_list, int batch_size) = 0;
 };
 
 // ==============SGD==============
@@ -1308,17 +1554,18 @@ public:
         this->learning_rate = learning_rate;
     }
 
-    void gradient_decent(vector<Layer *> layer_list) override {
+    void gradient_decent(vector<Layer *> layer_list, int batch_size) override {
         /* 更新公式如下：
          * Wt = Wt - learning_rate * d_w
          */
         for (int i = 0; i < layer_list.size(); i++) {
-            // 跳過dropout層
-            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
+            // 跳過dropout、flatten、MaxpoolingLayer層
+            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer" ||
+                layer_list[i]->layer_name == "MaxpoolingLayer") {
                 continue;
             }
-            layer_list[i]->w = layer_list[i]->w - learning_rate * layer_list[i]->d_w;
-            layer_list[i]->b = layer_list[i]->b - learning_rate * layer_list[i]->d_b;
+            layer_list[i]->w = layer_list[i]->w - learning_rate * layer_list[i]->d_w / (double) batch_size;
+            layer_list[i]->b = layer_list[i]->b - learning_rate * layer_list[i]->d_b / (double) batch_size;
         }
     }
 };
@@ -1336,14 +1583,15 @@ public:
         this->beta = beta;
     }
 
-    void gradient_decent(vector<Layer *> layer_list) override {
+    void gradient_decent(vector<Layer *> layer_list, int batch_size) override {
         // 第一次進來前先初始化last_v_w和last_v_b
         if (initial_flag) {
             initial_flag = false;
 
             for (int i = 0; i < layer_list.size(); i++) {
-                // 若是遇到dropout、Flatten層，則加一個空陣列，方便後面計算
-                if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
+                // 若是遇到dropout、Flatten、MaxpoolingLayer層，則加一個空陣列，方便後面計算
+                if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer" ||
+                    layer_list[i]->layer_name == "MaxpoolingLayer") {
                     last_v_w.emplace_back(Matrix(0, 0));
                     last_v_b.emplace_back(Matrix(0, 0));
                     continue;
@@ -1365,16 +1613,18 @@ public:
              * Vt = Beta * Vt-1 - learning_rate * d_w
              * W = W + Vt
              */
-            // 跳過dropout層
-            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer") {
+
+            // 跳過dropout、flatten、MaxpoolingLayer層
+            if (layer_list[i]->layer_name == "DropoutLayer" || layer_list[i]->layer_name == "FlattenLayer" ||
+                layer_list[i]->layer_name == "MaxpoolingLayer") {
                 continue;
             }
 
-            Matrix V_w_t = last_v_w[i] * beta - learning_rate * layer_list[i]->d_w;
+            Matrix V_w_t = last_v_w[i] * beta - learning_rate * layer_list[i]->d_w / (double) batch_size;
             last_v_w[i] = V_w_t;
             layer_list[i]->w = layer_list[i]->w + V_w_t;
 
-            Matrix V_b_t = last_v_b[i] * beta - learning_rate * layer_list[i]->d_b;
+            Matrix V_b_t = last_v_b[i] * beta - learning_rate * layer_list[i]->d_b / (double) batch_size;
             last_v_b[i] = V_b_t;
             layer_list[i]->b = layer_list[i]->b + V_b_t;
         }
@@ -1420,14 +1670,18 @@ public:
     // 訓練
     void fit(Matrix &train_x, Matrix &train_y) {
         for (int e = 0; e < epoch; e++) {
+            Matrix batch_x;
+            Matrix batch_y;
+            Matrix output;
+
             if (train_x.is_4d) {
                 for (int b = 0; b < train_x.batch; b += batch_size) {
-                    Matrix batch_x = get_batch_data(train_x, b,
-                                                    min((int) b + batch_size, (int) train_x.batch));
-                    Matrix batch_y = get_batch_data(train_y, b,
-                                                    min((int) b + batch_size, (int) train_y.row));
+                    batch_x = get_batch_data(train_x, b,
+                                             min((int) b + batch_size, (int) train_x.batch));
+                    batch_y = get_batch_data(train_y, b,
+                                             min((int) b + batch_size, (int) train_y.row));
                     // 前向傳播
-                    Matrix output = FP(batch_x);
+                    output = FP(batch_x);
 
                     // 反向傳播
                     BP(output, batch_y);
@@ -1435,46 +1689,29 @@ public:
                     // 梯度更新
                     update_weight();
 
-                    if (e == epoch - 1) {
-                        cout << "========================" << endl;
-                        cout << "Pre:" << endl;
-                        output.show_matrix();
-                        cout << "Label:" << endl;
-                        batch_y.show_matrix();
-                        cout << "Loss:" << endl;
-                        cout << (*loss).undiff(output, batch_y) << endl;
-                        cout << "========================" << endl;
-                    }
+                    // 顯示訓練進度
+                    double loss_ = (*loss).undiff(output, batch_y) / batch_size;
+                    printf("\rnow epoch:%4d, loss:%3.4f, progress:%4.4lf%%", e, loss_, b * 100 / (train_x.batch - 1.));
                 }
             } else {
                 for (int b = 0; b < train_x.row; b += batch_size) {
                     // 每次訓練讀取batch size 的資料去訓練
-                    Matrix batch_x = get_batch_data(train_x, b,
-                                                    min((int) b + batch_size, (int) train_x.row));
-                    Matrix batch_y = get_batch_data(train_y, b,
-                                                    min((int) b + batch_size, (int) train_y.row));
-
+                    batch_x = get_batch_data(train_x, b,
+                                             min((int) b + batch_size, (int) train_x.row));
+                    batch_y = get_batch_data(train_y, b,
+                                             min((int) b + batch_size, (int) train_y.row));
                     // 前向傳播
-                    Matrix output = FP(batch_x);
+                    output = FP(batch_x);
 
                     // 反向傳播
-//                    BP(output, batch_y);
+                    BP(output, batch_y);
 
                     // 梯度更新
-//                    update_weight();
+                    update_weight();
 
-                    // 顯示訓練資料
-                    if (e == epoch - 1) {
-                        cout << "========================" << endl;
-                        cout << "Pre:" << endl;
-                        output.show_matrix();
-                        cout << "Label:" << endl;
-                        batch_y.show_matrix();
-                        cout << "Loss:" << endl;
-                        cout << (*loss).undiff(output, batch_y) << endl;
-                        cout << "========================" << endl;
-                    }
-
+                    // 顯示訓練進度
+                    double loss_ = (*loss).undiff(output, batch_y) / batch_size;
+                    printf("\rnow epoch:%4d, loss:%3.4f, progress:%4.4lf%%", e, loss_, b * 100 / (train_x.batch - 1.));
                 }
             }
 
@@ -1499,19 +1736,30 @@ public:
         }
     }
 
-    // 驗證
-    void evaluate(Matrix val_x, Matrix val_y) {
-        Matrix output = FP(val_x, false);
 
-        cout << "========================" << endl;
-        cout << "Val Result:" << endl;
-        cout << "Pre:" << endl;
-        output.show_matrix();
-        cout << "Label:" << endl;
-        val_y.show_matrix();
-        cout << "Loss:" << endl;
-        cout << (*loss).undiff(output, val_y) << endl;
-        cout << "========================" << endl;
+    // 預測結果整理
+    void predict(Matrix &x, Matrix &label, int batch_size) {
+        // 取batch size筆資料進去預測
+        Matrix batch_x = get_batch_data(x, 0, min((int) batch_size, (int) x.batch));
+
+        // 前向傳播
+        Matrix output = FP(batch_x);
+
+        // 整理輸出結果與label對照
+        cout << setw(8) << "Predict" << setw(2) << "|" << setw(8) << "Label" << endl;
+
+        for (int r = 0; r < output.row; r++) {
+            int cls = 0;
+            double max = output.matrix[r][0];
+
+            for (int c = 0; c < output.col; c++) {
+                if (output.matrix[r][c] > max) {
+                    max = output.matrix[r][c];
+                    cls = c;
+                }
+            }
+            cout << setw(8) << cls << setw(2) << "|" << setw(8) << label.matrix[r][0] << endl;
+        }
     }
 
     // 前向傳播
@@ -1535,59 +1783,43 @@ public:
 
     // 更新權重
     inline void update_weight() const {
-        opt->gradient_decent(layer_list);
+        opt->gradient_decent(layer_list, batch_size);
     }
 };
 
 int main() {
     srand(time(NULL));
     // 超參數
-    int EPOCH = 100; // 學習次數
-    int BATCH_SIZE = 3;  // 批量大小
-    double LEARNING_RATE = 0.2;  // 學習率
+    int EPOCH = 1; // 學習次數
+    int BATCH_SIZE = 32;  // 批量大小
+    double LEARNING_RATE = 0.1;  // 學習率
 
-    // 訓練資料
-    double img[3][1][4][4] = {{{{0, 1, 1, 0},
-                                       {0, 1, 1, 0},
-                                       {0, 1, 0, 1},
-                                       {1, 0, 1, 1}}},
+    // 載入訓練資料
+    printf("Load training data.....\n");
+    Matrix *train_images = load_images("../train_images.idx3-ubyte", 60000);
+    Matrix *train_labels = load_label("../train_labels.idx1-ubyte", 60000);
+    Matrix *test_images = load_images("../test_images.idx3-ubyte", 10000);
+    Matrix *test_labels = load_label("../test_labels.idx1-ubyte", 10000);
+    printf("Loading successfully.\n");
 
-
-                              {{{0, 1, 1, 0},
-                                       {0, 1, 1, 1},
-                                       {0, 0, 0, 0},
-                                       {1, 1, 1, 1}}},
-
-
-                              {{{0, 1, 1, 0},
-                                       {0, 1, 0, 1},
-                                       {0, 1, 0, 1},
-                                       {0, 1, 0, 1}}}};
-
-    double target[3][4] = {{1, 0, 0, 0},
-                           {0, 1, 0, 0},
-                           {0, 0, 0, 1}};
-
-    Matrix train_x_matrix(img);
-    Matrix train_y_matrix(target);
-
+    // 將label轉換為one hot code
+    Matrix *train_one_hot_code = one_hot_code(*train_labels);
 
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
-    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.7));
+    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.8));
 
-    module.add(new ConvolutionLayer(_1D_MATRIX{1, 4, 4}, 5, 2, new sigmoid));
-    module.add(new ConvolutionLayer(5, 2, new sigmoid));
+    module.add(new ConvolutionLayer(_1D_MATRIX{1, 28, 28}, 16, 3, 1, new relu));
+    module.add(new MaxpoolingLayer(2));
+//    module.add(new ConvolutionLayer(8, 3, 1, new relu));
     module.add(new FlattenLayer());
-//    module.add(new BaseLayer(16, new sigmoid));
-//    module.add(new Dropout(0.2));
-    module.add(new BaseLayer(4, new softmax));
+    module.add(new BaseLayer(10, new softmax));
     module.compile();
 
     // 訓練
-    module.fit(train_x_matrix, train_y_matrix);
+    module.fit(*train_images, *train_one_hot_code);
 
     // 驗證
-//    module.evaluate(val_x, val_y);
+    module.predict(*test_images, *test_labels, 15);
 
     return 0;
 }
