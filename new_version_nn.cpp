@@ -8,7 +8,6 @@
 #include <vector>
 #include <fstream>
 
-
 using namespace std;
 typedef vector<double> _1D_MATRIX;
 typedef vector<vector<double>> _2D_MATRIX;
@@ -881,14 +880,14 @@ class softmax : public ActivationFunc {
 public:
     Matrix undiff(Matrix &m) override {
         // 把所有元素減去最大值
-        double max_num = m.maximize();
-        Matrix new_m = m - max_num;
+//        double max_num = m.maximize();
+//        Matrix new_m = m - max_num;
 
-        // 對每一列求exp總和
-        Matrix exp_sum = Matrix::exp(new_m).sum(1, true);
+        // 對每一行求exp總和
+        Matrix exp_sum = Matrix::exp(m).sum(1, true);
 
         // 將所有元素都以exp為底
-        Matrix exp_m = Matrix::exp(new_m);
+        Matrix exp_m = Matrix::exp(m);
 
         // 將每一列都除上剛剛的exp_sum
         Matrix result(exp_m.row, exp_m.col);
@@ -1199,9 +1198,9 @@ public:
     };
 
     void set_weight_bias() override {
-        double output_height = (input_shape[1] - k_size) / stride + 1;
-        double output_width = (input_shape[2] - k_size) / stride + 1;
-        this->output_shape = _1D_MATRIX{(double) filters, output_height, output_width};
+        int output_height = (input_shape[1] - k_size) / stride + 1;
+        int output_width = (input_shape[2] - k_size) / stride + 1;
+        this->output_shape = _1D_MATRIX{(double) filters, (double )output_height, (double )output_width};
 
         w = Matrix(filters, input_shape[0] * k_size * k_size);
         b = Matrix(filters, 1);
@@ -1736,8 +1735,7 @@ public:
         }
     }
 
-
-    // 預測結果整理
+    // 預測
     void predict(Matrix &x, Matrix &label, int batch_size) {
         // 取batch size筆資料進去預測
         Matrix batch_x = get_batch_data(x, 0, min((int) batch_size, (int) x.batch));
@@ -1746,6 +1744,7 @@ public:
         Matrix output = FP(batch_x);
 
         // 整理輸出結果與label對照
+        cout << endl;
         cout << setw(8) << "Predict" << setw(2) << "|" << setw(8) << "Label" << endl;
 
         for (int r = 0; r < output.row; r++) {
@@ -1791,8 +1790,9 @@ int main() {
     srand(time(NULL));
     // 超參數
     int EPOCH = 1; // 學習次數
-    int BATCH_SIZE = 32;  // 批量大小
+    int BATCH_SIZE = 16;  // 批量大小
     double LEARNING_RATE = 0.1;  // 學習率
+    double MOMENTUM_RATE = 0.5; // MOMENTUM_RATE
 
     // 載入訓練資料
     printf("Load training data.....\n");
@@ -1806,12 +1806,16 @@ int main() {
     Matrix *train_one_hot_code = one_hot_code(*train_labels);
 
     // 創建序列模型 module(Epoch, Batch size, Loss Function, Optimizer)
-    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, 0.8));
+    Sequential module(EPOCH, BATCH_SIZE, new Categorical_crosse_entropy, new Momentum(LEARNING_RATE, MOMENTUM_RATE));
 
+    // ConvolutionLayer(_1D_MATRIX {輸入通道, 輸入圖片高, 輸入圖片寬}, 卷積核數量, 卷積核大小, Stride, activation)
     module.add(new ConvolutionLayer(_1D_MATRIX{1, 28, 28}, 16, 3, 1, new relu));
+
+    // MaxpoolingLayer(Pooling 大小)
     module.add(new MaxpoolingLayer(2));
-//    module.add(new ConvolutionLayer(8, 3, 1, new relu));
+    module.add(new ConvolutionLayer(5, 5, 2, new relu));
     module.add(new FlattenLayer());
+    module.add(new BaseLayer(64, new relu));
     module.add(new BaseLayer(10, new softmax));
     module.compile();
 
